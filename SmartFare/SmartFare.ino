@@ -1,8 +1,17 @@
 
 #include "Http.h"
 #include "Arduino_FreeRTOS.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 
-// Global variables
+
+/*--------------------------------------------------*/
+/*----------- Global variables ---------------------*/
+/*--------------------------------------------------*/
+#define OLED_RESET 4
+Adafruit_SSD1306 display(OLED_RESET);
+
+
 unsigned int SI800_RX_PIN = 10; // Arduino Mega uses pin 10 por RX
 unsigned int SI800_TX_PIN = 11;
 unsigned int SI800_RST_PIN = 12;
@@ -21,7 +30,10 @@ void setup() {
   while(!Serial);
   Serial.println("Starting!");
 
-    
+  // initialize with the I2C addr 0x3D (for the 128x64)
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
+  displayTest();  
+
    // Now set up two tasks to run independently.
   xTaskCreate(
     TaskBlink
@@ -114,4 +126,30 @@ void print(const __FlashStringHelper *message, int code = -1){
   else {
     Serial.println(message);
   }
+}
+
+
+void displayTest(){
+
+  // Show image buffer on the display hardware.
+  // Since the buffer is intialized with an Adafruit splashscreen
+  // internally, this will display the splashscreen.
+  display.display();
+  delay(2000);
+
+  // Clear the buffer.
+  display.clearDisplay();
+    // text display tests
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0,0);
+  display.println("Hello, world!");
+  display.setTextColor(BLACK, WHITE); // 'inverted' text
+  display.println(3.141592);
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.print("0x"); display.println(0xDEADBEEF, HEX);
+  display.display();
+  delay(2000);
+  display.clearDisplay();
 }
