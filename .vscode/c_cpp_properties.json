@@ -5,7 +5,9 @@
             "includePath": [
                 "C:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\cores\\arduino",
                 "${workspaceRoot}/SmartFare/ArduinoSIM800L-master",
-                "${workspaceRoot}/SmartFare/FreeRTOS/src"
+                "${workspaceRoot}/SmartFare/FreeRTOS/src",
+                "${workspaceRoot}/SmartFare/Adafruit_GFX_Library",
+                "${workspaceRoot}/SmartFare/Adafruit_SSD1306"
             ],
             "browse": {
                 "limitSymbolsToIncludedHeaders": false,

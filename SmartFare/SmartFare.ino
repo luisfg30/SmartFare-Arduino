@@ -1,8 +1,9 @@
 
 #include "Http.h"
 #include "Arduino_FreeRTOS.h"
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include "Adafruit_GFX.h"
+#include "Adafruit_SSD1306.h"
+
 
 
 /*--------------------------------------------------*/
@@ -149,6 +150,7 @@ void displayTest(){
   display.setTextSize(2);
   display.setTextColor(WHITE);
   display.print("0x"); display.println(0xDEADBEEF, HEX);
+  display.println("R$ : 0123456789");
   display.display();
   delay(2000);
   display.clearDisplay();
