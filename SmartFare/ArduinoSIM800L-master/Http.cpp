@@ -62,7 +62,7 @@ Result HTTP::configureBearer(const char *apn){
   Result result = SUCCESS;
 
   unsigned int attempts = 0;
-  unsigned int MAX_ATTEMPTS = 10;
+  unsigned int MAX_ATTEMPTS = 3;
 
   sendATTest();
 
@@ -71,10 +71,10 @@ Result HTTP::configureBearer(const char *apn){
     sendCmdAndWaitForResp(SIGNAL_QUALITY, OK, 1000);
     attempts ++;
     delay(1000 * attempts);
-    if (attempts == MAX_ATTEMPTS) {
-      attempts = 0;
-      // preInit();
-    }
+    // if (attempts == MAX_ATTEMPTS) {
+    //   attempts = 0;
+    //   // preInit();
+    // }
   }
 
   if (sendCmdAndWaitForResp(BEARER_PROFILE_GPRS, OK, 2000) == FALSE)
@@ -92,7 +92,7 @@ Result HTTP::connect() {
 
   Result result = SUCCESS;
   unsigned int attempts = 0;
-  unsigned int MAX_ATTEMPTS = 10;
+  unsigned int MAX_ATTEMPTS = 3;
 
   while (sendCmdAndWaitForResp(QUERY_BEARER, BEARER_OPEN, 2000) == FALSE && attempts < MAX_ATTEMPTS){
     attempts ++;

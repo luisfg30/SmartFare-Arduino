@@ -3,6 +3,8 @@
 #include "Arduino_FreeRTOS.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
+#include <SPI.h>
+#include <MFRC522.h>
 
 
 
@@ -10,6 +12,11 @@
 /*----------- Global variables ---------------------*/
 /*--------------------------------------------------*/
 #define OLED_RESET 4
+#define RFID_RST_PIN         48         
+#define RFID_SS_PIN          53    //Slave Select or CS Chip Select
+
+MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
+
 Adafruit_SSD1306 display(OLED_RESET);
 
 
@@ -35,6 +42,11 @@ void setup() {
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
   displayTest();  
 
+  SPI.begin();			// Init SPI bus
+	mfrc522.PCD_Init();		// Init MFRC522
+	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
+	Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+
    // Now set up two tasks to run independently.
   xTaskCreate(
     TaskBlink
@@ -44,13 +56,13 @@ void setup() {
     ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
-  // xTaskCreate(
-  //   TaskAnalogRead
-  //   ,  (const portCHAR *) "AnalogRead"
-  //   ,  128  // Stack size
-  //   ,  NULL
-  //   ,  2  // Priority
-  //   ,  NULL );
+  xTaskCreate(
+    TaskAnalogRead
+    ,  (const portCHAR *) "AnalogRead"
+    ,  128  // Stack size
+    ,  NULL
+    ,  1  // Priority
+    ,  NULL );
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
 }
@@ -68,9 +80,10 @@ void TaskBlink(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   Serial.println("task 1 created");
-  testPOST();
+  // testPOST();
   // initialize digital LED_BUILTIN on pin 13 as an output.
   pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
 
   for (;;) // A Task shall never return or exit.
   {
@@ -88,7 +101,15 @@ void TaskAnalogRead(void *pvParameters)  // This is a task.
   Serial.println("task 2 created");
   for (;;)
   {
-   
+      // Look for new cards in RFID2
+      if (mfrc522.PICC_IsNewCardPresent()) {
+        // Select one of the cards
+        if (mfrc522.PICC_ReadCardSerial()) {
+          //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
+           Serial.println("\n\nCARD FOUND");
+        }
+      }
+      vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
   }
 }
 
