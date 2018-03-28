@@ -9,11 +9,14 @@
 
 
 /*--------------------------------------------------*/
-/*----------- Global variables ---------------------*/
+/*----------- Global variables ------------------t---*/
 /*--------------------------------------------------*/
-#define OLED_RESET 4
-#define RFID_RST_PIN         48         
-#define RFID_SS_PIN          53    //Slave Select or CS Chip Select
+#define OLED_RESET          4
+#define RFID_RST_PIN        48         
+#define RFID_SS_PIN         53    //Slave Select or CS Chip Select
+#define LED_RED             22        
+#define LED_GREEN           24
+#define LED_BLUE            26           
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
@@ -34,6 +37,12 @@ void print(const __FlashStringHelper *message, int code = -1);
 
 // the setup routine runs once when you press reset:
 void setup() {
+
+  // Init LED pins
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+
   Serial.begin(9600);
   while(!Serial);
   Serial.println("Starting!");
@@ -81,16 +90,17 @@ void TaskBlink(void *pvParameters)  // This is a task.
   (void) pvParameters;
   Serial.println("task 1 created");
   // testPOST();
-  // initialize digital LED_BUILTIN on pin 13 as an output.
-  pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
+
 
   for (;;) // A Task shall never return or exit.
   {
-    digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-    vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
-    digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-    vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
+    digitalWrite(LED_RED, HIGH);  
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );                
+    digitalWrite(LED_RED, LOW);   
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );   
+    digitalWrite(LED_GREEN, HIGH);   
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );                      
+    digitalWrite(LED_GREEN, LOW);
   }
 }
 
@@ -107,6 +117,9 @@ void TaskAnalogRead(void *pvParameters)  // This is a task.
         if (mfrc522.PICC_ReadCardSerial()) {
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
            Serial.println("\n\nCARD FOUND");
+           digitalWrite(LED_BLUE, HIGH);  
+           vTaskDelay( 100 / portTICK_PERIOD_MS );                
+           digitalWrite(LED_BLUE, LOW);   
         }
       }
       vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
