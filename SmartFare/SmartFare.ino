@@ -94,13 +94,27 @@ void TaskBlink(void *pvParameters)  // This is a task.
 
   for (;;) // A Task shall never return or exit.
   {
-    digitalWrite(LED_RED, HIGH);  
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );                
-    digitalWrite(LED_RED, LOW);   
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );   
-    digitalWrite(LED_GREEN, HIGH);   
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );                      
-    digitalWrite(LED_GREEN, LOW);
+    setLedRGB(0,0,1);
+    displayText("Azul");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(0,1,0); 
+    displayText("Verde");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(0,1,1); 
+    displayText("Turquesa");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(1,0,0); 
+    displayText("Vermelho");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(1,0,1); 
+    displayText("Purpura");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(1,1,0);
+    displayText("Amarelo"); 
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    setLedRGB(1,1,1); 
+    displayText("Branco");
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );                 
   }
 }
 
@@ -188,4 +202,31 @@ void displayTest(){
   display.display();
   delay(2000);
   display.clearDisplay();
+}
+
+void displayText(char* text) {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.print(text);
+  display.display();
+}
+
+void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
+  if (r == 1) {
+    digitalWrite(LED_RED, HIGH); 
+  } else if(r == 0) {
+    digitalWrite(LED_RED, LOW);
+  }
+  if (g == 1) {
+    digitalWrite(LED_GREEN, HIGH);
+  } else if(g == 0) {
+    digitalWrite(LED_GREEN, LOW);
+  }
+  if (b == 1) {
+    digitalWrite(LED_BLUE, HIGH);
+  } else if(b == 0) {
+    digitalWrite(LED_BLUE, LOW);
+  }
 }
