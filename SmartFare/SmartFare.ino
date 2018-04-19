@@ -17,6 +17,7 @@
 #define LED_RED             22        
 #define LED_GREEN           24
 #define LED_BLUE            26           
+#define GPS_BAUD_RATE       9600 
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
@@ -43,8 +44,14 @@ void setup() {
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
 
+// Debug Serial port
   Serial.begin(9600);
   while(!Serial);
+  Serial.println("Starting!");
+
+// GPS serial port
+  Serial1.begin(GPS_BAUD_RATE); 
+  while(!Serial1);
   Serial.println("Starting!");
 
   // initialize with the I2C addr 0x3D (for the 128x64)
@@ -73,6 +80,14 @@ void setup() {
     ,  1  // Priority
     ,  NULL );
 
+      xTaskCreate(
+    TaskGPS
+    ,  (const portCHAR *) "GPS"
+    ,  128  // Stack size
+    ,  NULL
+    ,  2  // Priority
+    ,  NULL );
+
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
 }
 
@@ -84,6 +99,26 @@ void loop() {
 /*--------------------------------------------------*/
 /*---------------------- Tasks ---------------------*/
 /*--------------------------------------------------*/
+
+
+void TaskGPS(void *pvParameters) {
+(void) pvParameters;
+
+char incomingByte = 0;   // for incoming serial data
+
+Serial.println("task GPS created");
+
+  for(;;) {
+    // Send data only when you receive data:
+    if (Serial1.available() > 0) {
+            // read the incoming byte:
+            incomingByte = Serial1.read();
+
+            // say what you got:
+            Serial.print(incomingByte);
+    }
+  }
+}
 
 void TaskBlink(void *pvParameters)  // This is a task.
 {
@@ -203,6 +238,7 @@ void displayTest(){
   delay(2000);
   display.clearDisplay();
 }
+
 
 void displayText(char* text) {
   display.clearDisplay();
