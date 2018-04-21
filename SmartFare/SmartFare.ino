@@ -91,7 +91,7 @@ void setup() {
       xTaskCreate(
     TaskGPS
     ,  (const portCHAR *) "GPS"
-    ,  128  // Stack size
+    ,  256  // Stack size
     ,  NULL
     ,  1  // Priority
     ,  NULL );
@@ -126,6 +126,11 @@ Serial.println("task GPS created");
           	parse_string();
 						memset(parse_buffer, 0 , sizeof(parse_buffer));
 						NMEA_index = 0;
+            if(frame.valid == 1) {
+              displayText("Frame Valid");
+            } else {
+              displayText("Frame Invalid");
+            }
         }
         dollar_counter++;
       }
@@ -288,8 +293,6 @@ void parse_string(){
 	            case MINMEA_SENTENCE_RMC: {
 	                if (minmea_parse_rmc(&frame, parse_buffer)) {
 	                	parse_counter++;
-                    Serial.print("\n PARSE COUNTER:");
-                    Serial.print(parse_counter);
 	                }
 
 	            } break;
