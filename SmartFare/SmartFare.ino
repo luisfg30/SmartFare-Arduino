@@ -5,7 +5,7 @@
 #include "Adafruit_SSD1306.h"
 #include <SPI.h>
 #include <MFRC522.h>
-#include "minmea.h"
+#include <stdio.h>
 
 
 /*******************************************************************************
@@ -32,8 +32,8 @@ bool RTC_started = 0;
 volatile uint8_t dollar_counter = 0;
 volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
-struct minmea_sentence_rmc NMEA_frame;
 bool GPRMC_received;
+bool NMEA_valid;
 
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
@@ -127,7 +127,7 @@ void TaskGPS(void *pvParameters) {
 (void) pvParameters;
 
 char incomingByte = 0;   
-
+char printString [40];
 Serial.println("task GPS created");
 
   for(;;) {
@@ -141,10 +141,16 @@ Serial.println("task GPS created");
 						memset(parse_buffer, 0 , sizeof(parse_buffer));
 						NMEA_index = 0;
             if(GPRMC_received == 1) {
-              if (NMEA_frame.valid == 1) {
+              if (NMEA_valid == 1) {
                 Serial.println("NMEA OK");
+                setLedRGB(0,0,1);
+                vTaskDelay( 100 / portTICK_PERIOD_MS );
+                setLedRGB(1,1,0);             
               } else {
                 Serial.println("NMEA INVALIDO");
+                setLedRGB(1,0,0);
+                vTaskDelay( 100 / portTICK_PERIOD_MS );
+                setLedRGB(1,1,0);      
               }
             } 
         }
@@ -285,20 +291,35 @@ void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
 
 
 void parse_string(){
-	switch (minmea_sentence_id(parse_buffer, false)) {
-	            case MINMEA_SENTENCE_RMC: {
-	              minmea_parse_rmc(&NMEA_frame, parse_buffer);
-                GPRMC_received = 1;
-	            } break;
-              
-	            case MINMEA_INVALID: {
-                GPRMC_received = 0;
-//	                DbgConsole_Printf("$xxxxx sentence is not valid\n");
-	            } break;
 
-	            default: {
-                GPRMC_received = 0;
-//	                DbgConsole_Printf( "$xxxxx sentence is not parsed\n");
-	            } break;
-	        }
+char *pToken;
+uint8_t field_counter = 0;
+
+    if(strstr(parse_buffer,"GPRMC")) {
+        GPRMC_received = 1;
+        pToken = strtok (parse_buffer, ",");
+        while (pToken != NULL)
+          {
+            // printf ("%s\n", pToken);
+            Serial.println(pToken);
+            switch(field_counter) {
+              case 2: // Data valid?
+                if(strcmp(pToken,"A") == 0) {
+                  NMEA_valid = 1;
+                } else {
+                  NMEA_valid = 0;
+                }
+              break;
+
+              case 3: // Latitude
+              break;
+              case 4: // Latitude sign
+              break;
+            }
+            pToken = strtok (NULL, ",");
+            field_counter ++;
+          }
+    } else {
+      GPRMC_received = 0;
+    }
 }
