@@ -8,38 +8,48 @@
 #include "minmea.h"
 
 
-
-/*--------------------------------------------------*/
-/*----------- Global variables ------------------t---*/
-/*--------------------------------------------------*/
+/*******************************************************************************
+ * Pin Configuration
+ ******************************************************************************/
 #define OLED_RESET          4
 #define RFID_RST_PIN        48         
 #define RFID_SS_PIN         53    //Slave Select or CS Chip Select
 #define LED_RED             22        
 #define LED_GREEN           24
-#define LED_BLUE            26           
+#define LED_BLUE            26
+
 #define GPS_BAUD_RATE       9600 
+
+/*******************************************************************************
+ * Public types/enumerations/variables
+ ******************************************************************************/
+
+// Global flags
+
+bool RTC_started = 0;
 
 // GPS variables
 volatile uint8_t dollar_counter = 0;
 volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
-struct minmea_sentence_rmc frame;
-uint8_t parse_counter = 0;
+struct minmea_sentence_rmc NMEA_frame;
+bool GPRMC_received;
+
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
 Adafruit_SSD1306 display(OLED_RESET);
 
 
-unsigned int SI800_RX_PIN = 10; // Arduino Mega uses pin 10 por RX
-unsigned int SI800_TX_PIN = 11;
-unsigned int SI800_RST_PIN = 12;
-HTTP http(9600, SI800_RX_PIN, SI800_TX_PIN, SI800_RST_PIN, TRUE);
+unsigned int SIM800_RX_PIN = 10; 
+unsigned int SIM800_TX_PIN = 11;
+unsigned int SIM800_RST_PIN = 12;
+HTTP http(9600, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, TRUE);
 
-// define two tasks for Blink & AnalogRead
-void TaskBlink( void *pvParameters );
-void TaskAnalogRead( void *pvParameters );
+// Tasks definition
+void TaskGSM( void *pvParameters );
+void TaskRFID( void *pvParameters );
+void TaskGPS(void *pvParameters);
 
 // aux functions declarations
 void print(const __FlashStringHelper *message, int code = -1);
@@ -55,12 +65,12 @@ void setup() {
 // Debug Serial port
   Serial.begin(9600);
   while(!Serial);
-  Serial.println("Starting!");
+  Serial.println("Starting debug serial!");
 
 // GPS serial port
   Serial1.begin(GPS_BAUD_RATE); 
   while(!Serial1);
-  Serial.println("Starting!");
+  Serial.println("Starting serial 1!");
 
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
@@ -71,21 +81,25 @@ void setup() {
 	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
 	Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
 
+  // First message
+    setLedRGB(1,1,0);
+    displayText("Iniciando RTC"); 
+
    // Now set up two tasks to run independently.
   xTaskCreate(
-    TaskBlink
-    ,  (const portCHAR *)"Blink"   // A name just for humans
+    TaskGSM
+    ,  (const portCHAR *)"GSM"   // A name just for humans
     ,  512  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
     ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
   xTaskCreate(
-    TaskAnalogRead
-    ,  (const portCHAR *) "AnalogRead"
+    TaskRFID
+    ,  (const portCHAR *) "RFID"
     ,  128  // Stack size
     ,  NULL
-    ,  1  // Priority
+    ,  2  // Priority
     ,  NULL );
 
       xTaskCreate(
@@ -93,7 +107,7 @@ void setup() {
     ,  (const portCHAR *) "GPS"
     ,  256  // Stack size
     ,  NULL
-    ,  1  // Priority
+    ,  3  // Priority
     ,  NULL );
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
@@ -112,7 +126,7 @@ void loop() {
 void TaskGPS(void *pvParameters) {
 (void) pvParameters;
 
-char incomingByte = 0;   // for incoming serial data
+char incomingByte = 0;   
 
 Serial.println("task GPS created");
 
@@ -126,11 +140,13 @@ Serial.println("task GPS created");
           	parse_string();
 						memset(parse_buffer, 0 , sizeof(parse_buffer));
 						NMEA_index = 0;
-            if(frame.valid == 1) {
-              displayText("Frame Valid");
-            } else {
-              displayText("Frame Invalid");
-            }
+            if(GPRMC_received == 1) {
+              if (NMEA_frame.valid == 1) {
+                Serial.println("NMEA OK");
+              } else {
+                Serial.println("NMEA INVALIDO");
+              }
+            } 
         }
         dollar_counter++;
       }
@@ -140,7 +156,7 @@ Serial.println("task GPS created");
   }
 }
 
-void TaskBlink(void *pvParameters)  // This is a task.
+void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   Serial.println("task 1 created");
@@ -149,31 +165,11 @@ void TaskBlink(void *pvParameters)  // This is a task.
 
   for (;;) // A Task shall never return or exit.
   {
-    setLedRGB(0,0,1);
-    displayText("Azul");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(0,1,0); 
-    displayText("Verde");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(0,1,1); 
-    displayText("Turquesa");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(1,0,0); 
-    displayText("Vermelho");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(1,0,1); 
-    displayText("Purpura");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(1,1,0);
-    displayText("Amarelo"); 
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );
-    setLedRGB(1,1,1); 
-    displayText("Branco");
-    vTaskDelay( 1000 / portTICK_PERIOD_MS );                 
+            
   }
 }
 
-void TaskAnalogRead(void *pvParameters)  // This is a task.
+void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   
@@ -291,16 +287,17 @@ void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
 void parse_string(){
 	switch (minmea_sentence_id(parse_buffer, false)) {
 	            case MINMEA_SENTENCE_RMC: {
-	                if (minmea_parse_rmc(&frame, parse_buffer)) {
-	                	parse_counter++;
-	                }
-
+	              minmea_parse_rmc(&NMEA_frame, parse_buffer);
+                GPRMC_received = 1;
 	            } break;
+              
 	            case MINMEA_INVALID: {
+                GPRMC_received = 0;
 //	                DbgConsole_Printf("$xxxxx sentence is not valid\n");
 	            } break;
 
 	            default: {
+                GPRMC_received = 0;
 //	                DbgConsole_Printf( "$xxxxx sentence is not parsed\n");
 	            } break;
 	        }
