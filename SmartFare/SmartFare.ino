@@ -5,6 +5,7 @@
 #include "Adafruit_SSD1306.h"
 #include <SPI.h>
 #include <MFRC522.h>
+#include "minmea.h"
 
 
 
@@ -18,6 +19,13 @@
 #define LED_GREEN           24
 #define LED_BLUE            26           
 #define GPS_BAUD_RATE       9600 
+
+// GPS variables
+volatile uint8_t dollar_counter = 0;
+volatile uint8_t NMEA_index = 0;
+char parse_buffer[128];
+struct minmea_sentence_rmc frame;
+uint8_t parse_counter = 0;
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
@@ -85,7 +93,7 @@ void setup() {
     ,  (const portCHAR *) "GPS"
     ,  128  // Stack size
     ,  NULL
-    ,  2  // Priority
+    ,  1  // Priority
     ,  NULL );
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
@@ -109,13 +117,20 @@ char incomingByte = 0;   // for incoming serial data
 Serial.println("task GPS created");
 
   for(;;) {
-    // Send data only when you receive data:
-    if (Serial1.available() > 0) {
-            // read the incoming byte:
-            incomingByte = Serial1.read();
 
-            // say what you got:
-            Serial.print(incomingByte);
+    if (Serial1.available() > 0) {
+      incomingByte = Serial1.read();
+      Serial.print(incomingByte);
+      if (incomingByte == '$') {
+        if(dollar_counter > 0) {
+          	parse_string();
+						memset(parse_buffer, 0 , sizeof(parse_buffer));
+						NMEA_index = 0;
+        }
+        dollar_counter++;
+      }
+      parse_buffer[NMEA_index] = incomingByte;
+      NMEA_index++;
     }
   }
 }
@@ -265,4 +280,25 @@ void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
   } else if(b == 0) {
     digitalWrite(LED_BLUE, LOW);
   }
+}
+
+
+void parse_string(){
+	switch (minmea_sentence_id(parse_buffer, false)) {
+	            case MINMEA_SENTENCE_RMC: {
+	                if (minmea_parse_rmc(&frame, parse_buffer)) {
+	                	parse_counter++;
+                    Serial.print("\n PARSE COUNTER:");
+                    Serial.print(parse_counter);
+	                }
+
+	            } break;
+	            case MINMEA_INVALID: {
+//	                DbgConsole_Printf("$xxxxx sentence is not valid\n");
+	            } break;
+
+	            default: {
+//	                DbgConsole_Printf( "$xxxxx sentence is not parsed\n");
+	            } break;
+	        }
 }
