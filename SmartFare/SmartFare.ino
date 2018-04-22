@@ -6,6 +6,7 @@
 #include <SPI.h>
 #include <MFRC522.h>
 #include <stdio.h>
+#include "SmartFareData.h"
 
 
 /*******************************************************************************
@@ -34,7 +35,11 @@ volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
 bool GPRMC_received;
 bool NMEA_valid;
+GPS_data_t gps_data_valid;
+GPS_data_t gps_data_parsed;
+static char testString[20];
 
+char printString [120];
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
@@ -127,7 +132,6 @@ void TaskGPS(void *pvParameters) {
 (void) pvParameters;
 
 char incomingByte = 0;   
-char printString [40];
 Serial.println("task GPS created");
 
   for(;;) {
@@ -145,7 +149,8 @@ Serial.println("task GPS created");
                 Serial.println("NMEA OK");
                 setLedRGB(0,0,1);
                 vTaskDelay( 100 / portTICK_PERIOD_MS );
-                setLedRGB(1,1,0);             
+                setLedRGB(1,1,0);
+                printGPSData();            
               } else {
                 Serial.println("NMEA INVALIDO");
                 setLedRGB(1,0,0);
@@ -293,33 +298,89 @@ void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
 void parse_string(){
 
 char *pToken;
+char *pToken1;
+char *timeStamp;
 uint8_t field_counter = 0;
+bool breakLoop = 0;
 
     if(strstr(parse_buffer,"GPRMC")) {
         GPRMC_received = 1;
         pToken = strtok (parse_buffer, ",");
         while (pToken != NULL)
           {
-            // printf ("%s\n", pToken);
+            if(breakLoop == 1) {
+              break;
+            }
             Serial.println(pToken);
             switch(field_counter) {
+
+              case 1:
+                memcpy(&timeStamp,&pToken,strlen(pToken+1));
+              break;
+
               case 2: // Data valid?
                 if(strcmp(pToken,"A") == 0) {
                   NMEA_valid = 1;
                 } else {
                   NMEA_valid = 0;
+                  breakLoop = 1;
                 }
               break;
 
               case 3: // Latitude
+                if(NMEA_valid == 1) {
+                  memcpy(gps_data_parsed.latitude,&pToken, strlen(pToken)+1);
+                }
               break;
               case 4: // Latitude sign
+                if(NMEA_valid == 1) {
+                  memcpy(gps_data_parsed.latituteSign,&pToken, strlen(pToken)+1);
+                }
+              break;
+              case 5: // Longitude 
+                if(NMEA_valid == 1) {
+                  memcpy(gps_data_parsed.longitude,&pToken, strlen(pToken)+1);
+                }
+              break;
+              case 6: // Longitude sign
+                if(NMEA_valid == 1) {
+                  memcpy(gps_data_parsed.longitudeSign,&pToken, strlen(pToken)+1);
+                }
+              break;
+              case 8: // Date
+                if(NMEA_valid == 1) {
+                  memcpy(gps_data_parsed.date,&pToken, strlen(pToken)+1);
+                }
               break;
             }
             pToken = strtok (NULL, ",");
             field_counter ++;
           }
+          if(NMEA_valid == 1) {
+            // Remove the .ss from timeStamp
+            Serial.println(timeStamp);
+            pToken1 = strtok(timeStamp,".");
+            if (pToken1 != NULL) {
+              Serial.println(timeStamp);
+              Serial.println(pToken1);
+              strcpy(testString, pToken1);
+            }
+          }
     } else {
       GPRMC_received = 0;
     }
+}
+
+void printGPSData() {
+  Serial.println("GPS_DATA_PARSED:\n");
+  Serial.write(testString);
+  displayText(testString);
+  Serial.println("");
+  Serial.write(gps_data_parsed.latitude);
+  Serial.write(gps_data_parsed.latituteSign);
+  Serial.println("");
+  Serial.write(gps_data_parsed.longitude);
+  Serial.write(gps_data_parsed.longitudeSign);
+  Serial.println("");
+  Serial.write(gps_data_parsed.date);
 }
