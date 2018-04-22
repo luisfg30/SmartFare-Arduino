@@ -35,8 +35,8 @@ volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
 bool GPRMC_received;
 bool NMEA_valid;
-GPS_data_t gps_data_valid;
-GPS_data_t gps_data_parsed;
+static GPS_data_t gps_data_valid;
+static GPS_data_t gps_data_parsed;
 static char testString[20];
 
 char printString [120];
@@ -88,7 +88,8 @@ void setup() {
 
   // First message
     setLedRGB(1,1,0);
-    displayText("Iniciando RTC"); 
+    display.clearDisplay();
+    displayText("Iniciando RTC", 2); 
 
    // Now set up two tasks to run independently.
   xTaskCreate(
@@ -110,7 +111,7 @@ void setup() {
       xTaskCreate(
     TaskGPS
     ,  (const portCHAR *) "GPS"
-    ,  256  // Stack size
+    ,  512  // Stack size
     ,  NULL
     ,  3  // Priority
     ,  NULL );
@@ -150,7 +151,7 @@ Serial.println("task GPS created");
                 setLedRGB(0,0,1);
                 vTaskDelay( 100 / portTICK_PERIOD_MS );
                 setLedRGB(1,1,0);
-                printGPSData();            
+                displayGPSData();            
               } else {
                 Serial.println("NMEA INVALIDO");
                 setLedRGB(1,0,0);
@@ -267,10 +268,9 @@ void displayTest(){
 }
 
 
-void displayText(char* text) {
-  display.clearDisplay();
+void displayText(char* text, uint8_t textSize) {
   display.setCursor(0,0);
-  display.setTextSize(2);
+  display.setTextSize(textSize);
   display.setTextColor(WHITE);
   display.print(text);
   display.display();
@@ -329,12 +329,12 @@ bool breakLoop = 0;
 
               case 3: // Latitude
                 if(NMEA_valid == 1) {
-                  memcpy(gps_data_parsed.latitude,&pToken, strlen(pToken)+1);
+                  strcpy(gps_data_parsed.latitude,pToken);
                 }
               break;
               case 4: // Latitude sign
                 if(NMEA_valid == 1) {
-                  memcpy(gps_data_parsed.latituteSign,&pToken, strlen(pToken)+1);
+                  strcpy(gps_data_parsed.latituteSign,pToken);
                 }
               break;
               case 5: // Longitude 
@@ -363,7 +363,7 @@ bool breakLoop = 0;
             if (pToken1 != NULL) {
               Serial.println(timeStamp);
               Serial.println(pToken1);
-              strcpy(testString, pToken1);
+              strcpy(gps_data_parsed.timestamp, pToken1);
             }
           }
     } else {
@@ -371,16 +371,26 @@ bool breakLoop = 0;
     }
 }
 
-void printGPSData() {
-  Serial.println("GPS_DATA_PARSED:\n");
-  Serial.write(testString);
-  displayText(testString);
-  Serial.println("");
-  Serial.write(gps_data_parsed.latitude);
-  Serial.write(gps_data_parsed.latituteSign);
-  Serial.println("");
-  Serial.write(gps_data_parsed.longitude);
-  Serial.write(gps_data_parsed.longitudeSign);
-  Serial.println("");
-  Serial.write(gps_data_parsed.date);
+void displayGPSData() {
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+
+  sprintf(printString, "time:%s",gps_data_parsed.timestamp); 
+  display.print(printString);
+  
+  sprintf(printString, "lat:%s %s",
+  gps_data_parsed.latitude, gps_data_parsed.latituteSign); 
+  display.print(printString);
+
+  display.display();
+  // displayText(printString,1);
+  // sprintf(printString, "long:%s %s",
+  // gps_data_parsed.longitude, gps_data_parsed.longitudeSign); 
+  // display.clearDisplay();
+  // displayText(printString,1);
+  // sprintf(printString, "time:%s",gps_data_parsed.date); 
+  // display.clearDisplay();
+  // displayText(printString,1);
 }
