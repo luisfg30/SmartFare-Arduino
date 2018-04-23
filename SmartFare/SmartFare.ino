@@ -311,7 +311,7 @@ bool breakLoop = 0;
             if(breakLoop == 1) {
               break;
             }
-            Serial.println(pToken);
+            // Serial.println(pToken);
             switch(field_counter) {
 
               case 1: // Timestamp
@@ -320,42 +320,36 @@ bool breakLoop = 0;
 
               case 2: // Data valid?
                 if(strcmp(pToken,"A") == 0) {
-                  Serial.print(F("ENTTROU NO A"));
                   NMEA_valid = 1;
-                  Serial.println(NMEA_valid);
                 } else {
-                   Serial.print(F("ENTTROU NO ELSE"));
                   NMEA_valid = 0;
-                  Serial.println(NMEA_valid);
                   breakLoop = 1;
                 }
               break;
 
               case 3: // Latitude
                 if(NMEA_valid == 1) {
-                  Serial.println(pToken);
-                  Serial.println(strlen(pToken));
                   strncpy(gps_data_parsed.latitude,pToken, strlen(pToken));
                 }
               break;
               case 4: // Latitude sign
                 if(NMEA_valid == 1) {
-                  // strcpy(gps_data_parsed.latituteSign,pToken);
+                  strncpy(gps_data_parsed.latituteSign,pToken, strlen(pToken));
                 }
               break;
               case 5: // Longitude 
                 if(NMEA_valid == 1) {
-                  // strcpy(gps_data_parsed.longitude,pToken);
+                  strncpy(gps_data_parsed.longitude,pToken, strlen(pToken));
                 }
               break;
               case 6: // Longitude sign
                 if(NMEA_valid == 1) {
-                  // strcpy(gps_data_parsed.longitudeSign,pToken);
+                  strncpy(gps_data_parsed.longitudeSign,pToken, strlen(pToken));
                 }
               break;
               case 8: // Date
                 if(NMEA_valid == 1) {
-                  // strcpy(gps_data_parsed.date,pToken);
+                  strncpy(gps_data_parsed.date,pToken, strlen(pToken));
                 }
               break;
             }
@@ -367,9 +361,6 @@ bool breakLoop = 0;
             Serial.println(timeStamp);
             pToken1 = strtok(timeStamp,".");
             if (pToken1 != NULL) {
-              // Serial.println(timeStamp);
-              // Serial.println(pToken1);
-              // Serial.println(strlen(pToken1));
               strncpy(gps_data_parsed.timestamp, pToken1, strlen(pToken1));
             }
           }
@@ -378,28 +369,25 @@ bool breakLoop = 0;
     }
 }
 
+/**
+ * @brief Show parsed data at the OLED display
+ * 
+ */
 void displayGPSData() {
   display.clearDisplay();
   display.setCursor(0,0);
   display.setTextSize(1);
   display.setTextColor(WHITE);
 
-  // sprintf(printString, "time:%s",gps_data_parsed.timestamp); 
   display.print(gps_data_parsed.timestamp);
   display.setCursor(0,15);
   display.print(gps_data_parsed.latitude);
-  // sprintf(printString, "lat:%s %s",
-  // gps_data_parsed.latitude, gps_data_parsed.latituteSign); 
-  // display.setCursor(0,0);
-  // display.print(printString);
+  display.print(gps_data_parsed.latituteSign);
+  display.setCursor(0,30);
+  display.print(gps_data_parsed.longitude);
+  display.print(gps_data_parsed.longitudeSign);
+  display.setCursor(0,45);
+  display.print(gps_data_parsed.date);
 
   display.display();
-  // displayText(printString,1);
-  // sprintf(printString, "long:%s %s",
-  // gps_data_parsed.longitude, gps_data_parsed.longitudeSign); 
-  // display.clearDisplay();
-  // displayText(printString,1);
-  // sprintf(printString, "time:%s",gps_data_parsed.date); 
-  // display.clearDisplay();
-  // displayText(printString,1);
 }
