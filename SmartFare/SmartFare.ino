@@ -34,7 +34,7 @@ volatile uint8_t dollar_counter = 0;
 volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
 bool GPRMC_received;
-bool NMEA_valid;
+static bool NMEA_valid;
 static GPS_data_t gps_data_valid;
 static GPS_data_t gps_data_parsed;
 static char testString[20];
@@ -79,7 +79,6 @@ void setup() {
 
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
-  displayTest();  
 
   SPI.begin();			// Init SPI bus
 	mfrc522.PCD_Init();		// Init MFRC522
@@ -146,6 +145,7 @@ Serial.println("task GPS created");
 						memset(parse_buffer, 0 , sizeof(parse_buffer));
 						NMEA_index = 0;
             if(GPRMC_received == 1) {
+              Serial.println(NMEA_valid);
               if (NMEA_valid == 1) {
                 Serial.println("NMEA OK");
                 setLedRGB(0,0,1);
@@ -314,42 +314,48 @@ bool breakLoop = 0;
             Serial.println(pToken);
             switch(field_counter) {
 
-              case 1:
+              case 1: // Timestamp
                 memcpy(&timeStamp,&pToken,strlen(pToken+1));
               break;
 
               case 2: // Data valid?
                 if(strcmp(pToken,"A") == 0) {
+                  Serial.print(F("ENTTROU NO A"));
                   NMEA_valid = 1;
+                  Serial.println(NMEA_valid);
                 } else {
+                   Serial.print(F("ENTTROU NO ELSE"));
                   NMEA_valid = 0;
+                  Serial.println(NMEA_valid);
                   breakLoop = 1;
                 }
               break;
 
               case 3: // Latitude
                 if(NMEA_valid == 1) {
-                  strcpy(gps_data_parsed.latitude,pToken);
+                  Serial.println(pToken);
+                  Serial.println(strlen(pToken));
+                  strncpy(gps_data_parsed.latitude,pToken, strlen(pToken));
                 }
               break;
               case 4: // Latitude sign
                 if(NMEA_valid == 1) {
-                  strcpy(gps_data_parsed.latituteSign,pToken);
+                  // strcpy(gps_data_parsed.latituteSign,pToken);
                 }
               break;
               case 5: // Longitude 
                 if(NMEA_valid == 1) {
-                  memcpy(gps_data_parsed.longitude,&pToken, strlen(pToken)+1);
+                  // strcpy(gps_data_parsed.longitude,pToken);
                 }
               break;
               case 6: // Longitude sign
                 if(NMEA_valid == 1) {
-                  memcpy(gps_data_parsed.longitudeSign,&pToken, strlen(pToken)+1);
+                  // strcpy(gps_data_parsed.longitudeSign,pToken);
                 }
               break;
               case 8: // Date
                 if(NMEA_valid == 1) {
-                  memcpy(gps_data_parsed.date,&pToken, strlen(pToken)+1);
+                  // strcpy(gps_data_parsed.date,pToken);
                 }
               break;
             }
@@ -361,9 +367,10 @@ bool breakLoop = 0;
             Serial.println(timeStamp);
             pToken1 = strtok(timeStamp,".");
             if (pToken1 != NULL) {
-              Serial.println(timeStamp);
-              Serial.println(pToken1);
-              strcpy(gps_data_parsed.timestamp, pToken1);
+              // Serial.println(timeStamp);
+              // Serial.println(pToken1);
+              // Serial.println(strlen(pToken1));
+              strncpy(gps_data_parsed.timestamp, pToken1, strlen(pToken1));
             }
           }
     } else {
@@ -377,12 +384,14 @@ void displayGPSData() {
   display.setTextSize(1);
   display.setTextColor(WHITE);
 
-  sprintf(printString, "time:%s",gps_data_parsed.timestamp); 
-  display.print(printString);
-  
-  sprintf(printString, "lat:%s %s",
-  gps_data_parsed.latitude, gps_data_parsed.latituteSign); 
-  display.print(printString);
+  // sprintf(printString, "time:%s",gps_data_parsed.timestamp); 
+  display.print(gps_data_parsed.timestamp);
+  display.setCursor(0,15);
+  display.print(gps_data_parsed.latitude);
+  // sprintf(printString, "lat:%s %s",
+  // gps_data_parsed.latitude, gps_data_parsed.latituteSign); 
+  // display.setCursor(0,0);
+  // display.print(printString);
 
   display.display();
   // displayText(printString,1);
