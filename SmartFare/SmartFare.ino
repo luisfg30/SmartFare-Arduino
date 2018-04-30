@@ -7,7 +7,10 @@
 #include <MFRC522.h>
 #include <stdio.h>
 #include "SmartFareData.h"
-
+#include <time.h>
+#include "RTCtimeUtils.h"
+#include <RtcDS1307.h>
+#include <Wire.h>
 
 /*******************************************************************************
  * Pin Configuration
@@ -25,8 +28,8 @@
  * Public types/enumerations/variables
  ******************************************************************************/
 
+RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
-
 bool RTC_started = 0;
 
 // GPS variables
@@ -77,6 +80,21 @@ void setup() {
   while(!Serial1);
   Serial.println("Starting serial 1!");
 
+  Rtc.Begin();
+  time_t startTime = setRTCTime();
+  Rtc.SetTime(&startTime);
+
+      if (Rtc.IsDateTimeValid())      // Check if the RTC is still reliable...
+    {
+      time_t now = Rtc.GetTime();
+      struct tm utc_tm;
+      // Standard ISO timestamp yyy-mm-dd hh:mm:ss
+      gmtime_r(&now, &utc_tm);      
+      char utc_timestamp[20];
+      strcpy(utc_timestamp, isotime(&utc_tm));
+      Serial.print(F("UTC timestamp: "));
+      Serial.print(utc_timestamp);
+    }
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
@@ -390,4 +408,16 @@ void displayGPSData() {
   display.print(gps_data_parsed.date);
 
   display.display();
+}
+
+time_t setRTCTime() {
+  struct tm tm_time;
+  tm_time.tm_year = 2018 - 1900;
+  tm_time.tm_mon = 4 - 1;
+  tm_time.tm_mday = 30;
+  tm_time.tm_hour = 18;
+  tm_time.tm_min  = 40;
+  tm_time.tm_sec  = 0;
+  tm_time.tm_isdst = 0;
+  return mktime(&tm_time);
 }
