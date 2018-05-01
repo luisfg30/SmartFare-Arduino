@@ -23,6 +23,7 @@
 #define LED_BLUE            5
 
 #define GPS_BAUD_RATE       9600 
+#define DEBUGSERIAL
 
 /*******************************************************************************
  * Public types/enumerations/variables
@@ -71,15 +72,17 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
 
 // Debug Serial port
-  Serial.begin(9600);
-  while(!Serial);
-  Serial.println("Starting debug serial!");
-
+  #ifdef DEBUGSERIAL
+    Serial.begin(115200);
+    while(!Serial);
+    Serial.println(F("Started debug serial!"));
+  #endif
 // GPS serial port
   Serial1.begin(GPS_BAUD_RATE); 
   while(!Serial1);
-  Serial.println("Starting serial 1!");
-
+  #ifdef DEBUGSERIAL
+    Serial.println(F("Started serial 1!"));
+  #endif
   Rtc.Begin();
   time_t startTime = setRTCTime();
   Rtc.SetTime(&startTime);
@@ -92,17 +95,20 @@ void setup() {
       gmtime_r(&now, &utc_tm);      
       char utc_timestamp[20];
       strcpy(utc_timestamp, isotime(&utc_tm));
-      Serial.print(F("UTC timestamp: "));
-      Serial.print(utc_timestamp);
+      #ifdef DEBUGSERIAL
+        Serial.print(F("UTC timestamp: "));
+        Serial.print(utc_timestamp);
+      #endif
     }
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
   SPI.begin();			// Init SPI bus
 	mfrc522.PCD_Init();		// Init MFRC522
-	mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-	Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
-
+  #ifdef DEBUGSERIAL
+    mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
+    Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+  #endif
   // First message
     setLedRGB(1,1,0);
     display.clearDisplay();
@@ -149,29 +155,36 @@ void loop() {
 void TaskGPS(void *pvParameters) {
 (void) pvParameters;
 
-char incomingByte = 0;   
-Serial.println("task GPS created");
+char incomingByte = 0;
+#ifdef DEBUGSERIAL   
+  Serial.println(F("task GPS created"));
+#endif
 
   for(;;) {
 
     if (Serial1.available() > 0) {
       incomingByte = Serial1.read();
-      Serial.print(incomingByte);
+      #ifdef DEBUGSERIAL
+        Serial.print(incomingByte);
+      #endif
       if (incomingByte == '$') {
         if(dollar_counter > 0) {
           	parse_string();
 						memset(parse_buffer, 0 , sizeof(parse_buffer));
 						NMEA_index = 0;
             if(GPRMC_received == 1) {
-              Serial.println(NMEA_valid);
               if (NMEA_valid == 1) {
-                Serial.println("NMEA OK");
+                #ifdef DEBUGSERIAL
+                  Serial.println(F("NMEA OK"));
+                #endif
                 setLedRGB(0,0,1);
                 vTaskDelay( 100 / portTICK_PERIOD_MS );
                 setLedRGB(1,1,0);
                 displayGPSData();            
               } else {
-                Serial.println("NMEA INVALIDO");
+                #ifdef DEBUGSERIAL
+                  Serial.println(F("NMEA INVALIDO"));
+                #endif
                 setLedRGB(1,0,0);
                 vTaskDelay( 100 / portTICK_PERIOD_MS );
                 setLedRGB(1,1,0);      
@@ -189,7 +202,9 @@ Serial.println("task GPS created");
 void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  Serial.println("task 1 created");
+  #ifdef DEBUGSERIAL
+    Serial.println(F("task 1 created"));
+  #endif
   // testPOST();
 
 
@@ -202,8 +217,9 @@ void TaskGSM(void *pvParameters)  // This is a task.
 void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  
-  Serial.println("task 2 created");
+  #ifdef DEBUGSERIAL
+    Serial.println(F("task 2 created"));
+  #endif  
   for (;;)
   {
       // Look for new cards in RFID2
@@ -211,7 +227,9 @@ void TaskRFID(void *pvParameters)  // This is a task.
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
-           Serial.println("\n\nCARD FOUND");
+           #ifdef DEBUGSERIAL
+            Serial.println(F("\n\nCARD FOUND"));
+           #endif 
            digitalWrite(LED_BLUE, HIGH);  
            vTaskDelay( 100 / portTICK_PERIOD_MS );                
            digitalWrite(LED_BLUE, LOW);   
@@ -240,8 +258,10 @@ void testPOST(){
   result = http.post("ptsv2.com/t/1etbw-1520389850/post", "{\"date\":\"12345678\"}", response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
-    Serial.println("Server Response:");
-    Serial.println(response);
+    #ifdef DEBUGSERIAL
+      Serial.println(F("Server Response:"));
+      Serial.println(response);
+    #endif  
   }
 
   print(F("HTTP disconnect: "), http.disconnect());
@@ -257,34 +277,6 @@ void print(const __FlashStringHelper *message, int code = -1){
     Serial.println(message);
   }
 }
-
-
-void displayTest(){
-
-  // Show image buffer on the display hardware.
-  // Since the buffer is intialized with an Adafruit splashscreen
-  // internally, this will display the splashscreen.
-  display.display();
-  delay(2000);
-
-  // Clear the buffer.
-  display.clearDisplay();
-    // text display tests
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(0,0);
-  display.println("Hello, world!");
-  display.setTextColor(BLACK, WHITE); // 'inverted' text
-  display.println(3.141592);
-  display.setTextSize(2);
-  display.setTextColor(WHITE);
-  display.print("0x"); display.println(0xDEADBEEF, HEX);
-  display.println("R$ : 0123456789");
-  display.display();
-  delay(2000);
-  display.clearDisplay();
-}
-
 
 void displayText(char* text, uint8_t textSize) {
   display.setCursor(0,0);
@@ -313,7 +305,7 @@ void setLedRGB(uint8_t r, uint8_t g, uint8_t b) {
 }
 
 
-void parse_string(){
+void parse_string() {
 
 char *pToken;
 char *pToken1;
@@ -376,7 +368,7 @@ bool breakLoop = 0;
           }
           if(NMEA_valid == 1) {
             // Remove the .ss from timeStamp
-            Serial.println(timeStamp);
+            // Serial.println(timeStamp);
             pToken1 = strtok(timeStamp,".");
             if (pToken1 != NULL) {
               strncpy(gps_data_parsed.timestamp, pToken1, strlen(pToken1));
