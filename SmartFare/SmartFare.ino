@@ -23,7 +23,7 @@
 #define LED_BLUE            5
 
 #define GPS_BAUD_RATE       9600 
-#define DEBUGSERIAL
+// #define DEBUGSERIAL
 
 /*******************************************************************************
  * Public types/enumerations/variables
@@ -39,7 +39,6 @@ volatile uint8_t NMEA_index = 0;
 char parse_buffer[128];
 bool GPRMC_received;
 static bool NMEA_valid;
-static GPS_data_t gps_data_valid;
 static GPS_data_t gps_data_parsed;
 static char testString[20];
 
@@ -66,12 +65,17 @@ void print(const __FlashStringHelper *message, int code = -1);
 // the setup routine runs once when you press reset:
 void setup() {
 
+  Rtc.Begin();
+
   // Init LED pins
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
 
 // Debug Serial port
+    Serial.begin(115200);
+    while(!Serial);
+    Serial.println(F("Started debug serial!"));
   #ifdef DEBUGSERIAL
     Serial.begin(115200);
     while(!Serial);
@@ -83,23 +87,7 @@ void setup() {
   #ifdef DEBUGSERIAL
     Serial.println(F("Started serial 1!"));
   #endif
-  Rtc.Begin();
-  time_t startTime = setRTCTime();
-  Rtc.SetTime(&startTime);
 
-      if (Rtc.IsDateTimeValid())      // Check if the RTC is still reliable...
-    {
-      time_t now = Rtc.GetTime();
-      struct tm utc_tm;
-      // Standard ISO timestamp yyy-mm-dd hh:mm:ss
-      gmtime_r(&now, &utc_tm);      
-      char utc_timestamp[20];
-      strcpy(utc_timestamp, isotime(&utc_tm));
-      #ifdef DEBUGSERIAL
-        Serial.print(F("UTC timestamp: "));
-        Serial.print(utc_timestamp);
-      #endif
-    }
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
@@ -126,7 +114,7 @@ void setup() {
   xTaskCreate(
     TaskRFID
     ,  (const portCHAR *) "RFID"
-    ,  128  // Stack size
+    ,  512  // Stack size
     ,  NULL
     ,  2  // Priority
     ,  NULL );
@@ -174,6 +162,12 @@ char incomingByte = 0;
 						NMEA_index = 0;
             if(GPRMC_received == 1) {
               if (NMEA_valid == 1) {
+                if (RTC_started == 0) {
+                  // Format data
+                  // Start RTC
+                  time_t startTime = setRTCTime();
+                  Rtc.SetTime(&startTime);
+                }
                 #ifdef DEBUGSERIAL
                   Serial.println(F("NMEA OK"));
                 #endif
@@ -203,7 +197,7 @@ void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   #ifdef DEBUGSERIAL
-    Serial.println(F("task 1 created"));
+    Serial.println(F("task GSM created"));
   #endif
   // testPOST();
 
@@ -218,7 +212,7 @@ void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
   #ifdef DEBUGSERIAL
-    Serial.println(F("task 2 created"));
+    Serial.println(F("task RFID created"));
   #endif  
   for (;;)
   {
@@ -230,6 +224,20 @@ void TaskRFID(void *pvParameters)  // This is a task.
            #ifdef DEBUGSERIAL
             Serial.println(F("\n\nCARD FOUND"));
            #endif 
+            // Check if the RTC is still reliable...
+            if (Rtc.IsDateTimeValid())      
+            {
+              time_t now = Rtc.GetTime();
+              struct tm utc_tm;
+              // Standard ISO timestamp yyy-mm-dd hh:mm:ss
+              gmtime_r(&now, &utc_tm);      
+              char utc_timestamp[20];
+              strcpy(utc_timestamp, isotime(&utc_tm));
+              #ifdef DEBUGSERIAL
+                Serial.print(F("UTC timestamp: "));
+                Serial.print(utc_timestamp);
+              #endif
+            }
            digitalWrite(LED_BLUE, HIGH);  
            vTaskDelay( 100 / portTICK_PERIOD_MS );                
            digitalWrite(LED_BLUE, LOW);   
@@ -309,7 +317,7 @@ void parse_string() {
 
 char *pToken;
 char *pToken1;
-char *timeStamp;
+char timeStamp[10];
 uint8_t field_counter = 0;
 bool breakLoop = 0;
 
@@ -325,7 +333,8 @@ bool breakLoop = 0;
             switch(field_counter) {
 
               case 1: // Timestamp
-                memcpy(&timeStamp,&pToken,strlen(pToken+1));
+                // memcpy(&timeStamp,&pToken,strlen(pToken+1));
+                strncpy(timeStamp, pToken, strlen(pToken));
               break;
 
               case 2: // Data valid?
@@ -368,7 +377,6 @@ bool breakLoop = 0;
           }
           if(NMEA_valid == 1) {
             // Remove the .ss from timeStamp
-            // Serial.println(timeStamp);
             pToken1 = strtok(timeStamp,".");
             if (pToken1 != NULL) {
               strncpy(gps_data_parsed.timestamp, pToken1, strlen(pToken1));
@@ -403,13 +411,61 @@ void displayGPSData() {
 }
 
 time_t setRTCTime() {
+
   struct tm tm_time;
-  tm_time.tm_year = 2018 - 1900;
-  tm_time.tm_mon = 4 - 1;
-  tm_time.tm_mday = 30;
-  tm_time.tm_hour = 18;
-  tm_time.tm_min  = 40;
-  tm_time.tm_sec  = 0;
-  tm_time.tm_isdst = 0;
+	int year, month, day, hours, minutes, seconds;
+  char* pDateString = gps_data_parsed.date;
+  char* pTimeString = gps_data_parsed.timestamp;
+  int size;
+  // #ifdef DEBUGSERIAL
+  // size = strlen(pDateString);
+  // Serial.println(size);
+  // pDateString+= 1;
+  // size = strlen(pDateString);
+  // Serial.println(size);
+  // #endif
+  char s_day[3];
+  char s_month[3];
+  char s_year[3];
+  char s_hour[3];
+  char s_min[3];
+  char s_sec[3];
+
+  strncpy(s_day, pDateString, 2);
+  pDateString += 2;
+  strncpy(s_month, pDateString, 2);
+  pDateString += 2;
+  strncpy(s_year, pDateString, 2);
+
+  size = strlen(pTimeString);
+  Serial.println(pTimeString);
+  Serial.println(size);
+  strncpy(s_hour, pTimeString, 2);
+  s_hour[2] = '\0';
+  pTimeString += 2;
+  strncpy(s_min, pTimeString, 2);
+  s_min[2] = '\0';
+  pTimeString += 2;
+  strncpy(s_sec, pTimeString, 2);
+  s_sec[2] = '\0';
+
+  Serial.println(s_hour);
+  Serial.println(s_min);
+  Serial.println(s_sec);
+
+	// year = (int) strtol(s_year, NULL, 10);	
+	// month = (int) strtol(s_month, NULL, 10);	
+	// day = (int) strtol(s_day, NULL, 10);	
+	// hours = (int) strtol(s_hour, NULL, 10);	
+	// minutes = (int) strtol(s_min, NULL, 10);	
+	// seconds = (int) strtol(s_sec, NULL, 10);
+
+  // tm_time.tm_year = year - 1900;
+  // tm_time.tm_mon =month - 1;
+  // tm_time.tm_mday = day;
+  // tm_time.tm_hour = hours;
+  // tm_time.tm_min  = minutes;
+  // tm_time.tm_sec  = seconds;
+  // tm_time.tm_isdst = 0;
   return mktime(&tm_time);
 }
