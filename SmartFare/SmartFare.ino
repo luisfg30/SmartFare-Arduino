@@ -41,9 +41,6 @@ char parse_buffer[128];
 bool GPRMC_received;
 static bool NMEA_valid;
 static GPS_data_t gps_data_parsed;
-static char testString[20];
-
-char printString [120];
 
 MFRC522 mfrc522(RFID_SS_PIN, RFID_RST_PIN);  // Create MFRC522 instance
 
@@ -165,6 +162,7 @@ char incomingByte = 0;
                   time_t startTime = setRTCTime();
                   Rtc.SetTime(&startTime);
                   RTC_started = 1;
+                  setLedRGB(0,0,0);
                 }
                 #ifdef DEBUGSERIAL
                   Serial.println(F("NMEA OK"));
@@ -414,14 +412,6 @@ time_t setRTCTime() {
 	int year, month, day, hours, minutes, seconds;
   char* pDateString = gps_data_parsed.date;
   char* pTimeString = gps_data_parsed.timestamp;
-  int size;
-  // #ifdef DEBUGSERIAL
-  // size = strlen(pDateString);
-  // Serial.println(size);
-  // pDateString+= 1;
-  // size = strlen(pDateString);
-  // Serial.println(size);
-  // #endif
   char s_day[3];
   char s_month[3];
   char s_year[3];
@@ -435,9 +425,6 @@ time_t setRTCTime() {
   pDateString += 2;
   strncpy(s_year, pDateString, 2);
 
-  size = strlen(pTimeString);
-  // Serial.println(pTimeString);
-  // Serial.println(size);
   strncpy(s_hour, pTimeString, 2);
   s_hour[2] = '\0';
   pTimeString += 2;
@@ -447,19 +434,12 @@ time_t setRTCTime() {
   strncpy(s_sec, pTimeString, 2);
   s_sec[2] = '\0';
 
-  // Serial.println(s_hour);
-  // Serial.println(s_min);
-  // Serial.println(s_sec);
-
 	year = (int) strtol(s_year, NULL, 10);	
 	month = (int) strtol(s_month, NULL, 10);	
 	day = (int) strtol(s_day, NULL, 10);	
 	hours = (int) strtol(s_hour, NULL, 10);	
 	minutes = (int) strtol(s_min, NULL, 10);	
 	seconds = (int) strtol(s_sec, NULL, 10);
-
-  Serial.print(day); Serial.print(month);Serial.println(year);
-  Serial.print(hours), Serial.print(minutes); Serial.print(seconds);
 
   tm_time.tm_year = year + 2000 - 1900;
   tm_time.tm_mon = month - 1;
