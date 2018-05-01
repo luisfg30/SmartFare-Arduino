@@ -18,9 +18,9 @@
 #define OLED_RESET          4
 #define RFID_RST_PIN        48         
 #define RFID_SS_PIN         53    //Slave Select or CS Chip Select
-#define LED_RED             22        
-#define LED_GREEN           24
-#define LED_BLUE            26
+#define LED_RED             7        
+#define LED_GREEN           6
+#define LED_BLUE            5
 
 #define GPS_BAUD_RATE       9600 
 
