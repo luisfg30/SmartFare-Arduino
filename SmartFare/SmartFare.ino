@@ -25,6 +25,7 @@
 #define GPS_BAUD_RATE       9600 
 #define DEBUGSERIAL
 #define DEBUGRFID
+#define DEBUGGPS
 
 /*******************************************************************************
  * Public types/enumerations/variables
@@ -146,7 +147,7 @@ char incomingByte = 0;
 
     if (Serial1.available() > 0) {
       incomingByte = Serial1.read();
-      #ifdef DEBUGSERIAL
+      #ifdef DEBUGGPS
         Serial.print(incomingByte);
       #endif
       if (incomingByte == '$') {
@@ -164,20 +165,20 @@ char incomingByte = 0;
                   RTC_started = 1;
                   setLedRGB(0,0,0);
                 }
-                #ifdef DEBUGSERIAL
+                #ifdef DEBUGGPS
                   Serial.println(F("NMEA OK"));
-                #endif
-                setLedRGB(0,0,1);
-                vTaskDelay( 100 / portTICK_PERIOD_MS );
-                setLedRGB(1,1,0);
-                displayGPSData();            
+                  setLedRGB(0,0,1);
+                  vTaskDelay( 100 / portTICK_PERIOD_MS );
+                  setLedRGB(1,1,0);
+                  displayGPSData();
+                #endif            
               } else {
-                #ifdef DEBUGSERIAL
+                #ifdef DEBUGGPS
                   Serial.println(F("NMEA INVALIDO"));
-                #endif
-                setLedRGB(1,0,0);
-                vTaskDelay( 100 / portTICK_PERIOD_MS );
-                setLedRGB(1,1,0);      
+                  setLedRGB(1,0,0);
+                  vTaskDelay( 100 / portTICK_PERIOD_MS );
+                  setLedRGB(1,1,0);    
+                 #endif  
               }
             } 
         }
