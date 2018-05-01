@@ -23,7 +23,8 @@
 #define LED_BLUE            5
 
 #define GPS_BAUD_RATE       9600 
-// #define DEBUGSERIAL
+#define DEBUGSERIAL
+#define DEBUGRFID
 
 /*******************************************************************************
  * Public types/enumerations/variables
@@ -73,9 +74,6 @@ void setup() {
   pinMode(LED_BLUE, OUTPUT);
 
 // Debug Serial port
-    Serial.begin(115200);
-    while(!Serial);
-    Serial.println(F("Started debug serial!"));
   #ifdef DEBUGSERIAL
     Serial.begin(115200);
     while(!Serial);
@@ -84,16 +82,15 @@ void setup() {
 // GPS serial port
   Serial1.begin(GPS_BAUD_RATE); 
   while(!Serial1);
-  #ifdef DEBUGSERIAL
-    Serial.println(F("Started serial 1!"));
-  #endif
+  Serial.println(F("Started serial 1 (GPS)"));
+
 
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
 
   SPI.begin();			// Init SPI bus
 	mfrc522.PCD_Init();		// Init MFRC522
-  #ifdef DEBUGSERIAL
+  #ifdef DEBUGRFID
     mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
     Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
   #endif
@@ -167,6 +164,7 @@ char incomingByte = 0;
                   // Start RTC
                   time_t startTime = setRTCTime();
                   Rtc.SetTime(&startTime);
+                  RTC_started = 1;
                 }
                 #ifdef DEBUGSERIAL
                   Serial.println(F("NMEA OK"));
@@ -221,7 +219,7 @@ void TaskRFID(void *pvParameters)  // This is a task.
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
-           #ifdef DEBUGSERIAL
+           #ifdef DEBUGRFID
             Serial.println(F("\n\nCARD FOUND"));
            #endif 
             // Check if the RTC is still reliable...
@@ -438,8 +436,8 @@ time_t setRTCTime() {
   strncpy(s_year, pDateString, 2);
 
   size = strlen(pTimeString);
-  Serial.println(pTimeString);
-  Serial.println(size);
+  // Serial.println(pTimeString);
+  // Serial.println(size);
   strncpy(s_hour, pTimeString, 2);
   s_hour[2] = '\0';
   pTimeString += 2;
@@ -449,23 +447,26 @@ time_t setRTCTime() {
   strncpy(s_sec, pTimeString, 2);
   s_sec[2] = '\0';
 
-  Serial.println(s_hour);
-  Serial.println(s_min);
-  Serial.println(s_sec);
+  // Serial.println(s_hour);
+  // Serial.println(s_min);
+  // Serial.println(s_sec);
 
-	// year = (int) strtol(s_year, NULL, 10);	
-	// month = (int) strtol(s_month, NULL, 10);	
-	// day = (int) strtol(s_day, NULL, 10);	
-	// hours = (int) strtol(s_hour, NULL, 10);	
-	// minutes = (int) strtol(s_min, NULL, 10);	
-	// seconds = (int) strtol(s_sec, NULL, 10);
+	year = (int) strtol(s_year, NULL, 10);	
+	month = (int) strtol(s_month, NULL, 10);	
+	day = (int) strtol(s_day, NULL, 10);	
+	hours = (int) strtol(s_hour, NULL, 10);	
+	minutes = (int) strtol(s_min, NULL, 10);	
+	seconds = (int) strtol(s_sec, NULL, 10);
 
-  // tm_time.tm_year = year - 1900;
-  // tm_time.tm_mon =month - 1;
-  // tm_time.tm_mday = day;
-  // tm_time.tm_hour = hours;
-  // tm_time.tm_min  = minutes;
-  // tm_time.tm_sec  = seconds;
-  // tm_time.tm_isdst = 0;
+  Serial.print(day); Serial.print(month);Serial.println(year);
+  Serial.print(hours), Serial.print(minutes); Serial.print(seconds);
+
+  tm_time.tm_year = year + 2000 - 1900;
+  tm_time.tm_mon = month - 1;
+  tm_time.tm_mday = day;
+  tm_time.tm_hour = hours;
+  tm_time.tm_min  = minutes;
+  tm_time.tm_sec  = seconds;
+  tm_time.tm_isdst = 0;
   return mktime(&tm_time);
 }
