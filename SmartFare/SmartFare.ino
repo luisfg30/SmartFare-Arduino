@@ -25,11 +25,14 @@
 #define GPS_BAUD_RATE       9600 
 #define DEBUGSERIAL
 #define DEBUGRFID
-#define DEBUGGPS
+// #define DEBUGGPS
 
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
+
+static UserInfo_T tapInEvents[USER_BUFFER_SIZE];
+uint32_t last_user_ID;
 
 RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
@@ -94,7 +97,6 @@ void setup() {
   #endif
   // First message
     setLedRGB(1,1,0);
-    display.clearDisplay();
     displayText("Iniciando RTC", 2); 
 
    // Now set up two tasks to run independently.
@@ -164,20 +166,21 @@ char incomingByte = 0;
                   Rtc.SetTime(&startTime);
                   RTC_started = 1;
                   setLedRGB(0,0,0);
+                  displayText("Aproxime o cartao", 2);
                 }
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA OK"));
                   setLedRGB(0,0,1);
                   vTaskDelay( 100 / portTICK_PERIOD_MS );
                   setLedRGB(1,1,0);
+                #ifdef DEBUGGPS
+                  Serial.println(F("NMEA OK"));
                   displayGPSData();
                 #endif            
-              } else {
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA INVALIDO"));
+              } else {  
                   setLedRGB(1,0,0);
                   vTaskDelay( 100 / portTICK_PERIOD_MS );
-                  setLedRGB(1,1,0);    
+                  setLedRGB(1,1,0); 
+                #ifdef DEBUGGPS
+                  Serial.println(F("NMEA INVALIDO")); 
                  #endif  
               }
             } 
@@ -217,9 +220,22 @@ void TaskRFID(void *pvParameters)  // This is a task.
       if (mfrc522.PICC_IsNewCardPresent()) {
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
+          setLedRGB(0,1,0);
+          vTaskDelay( 100 / portTICK_PERIOD_MS );
+          setLedRGB(0,0,0);
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
+
+          // Convert the uid bytes to an integer, byte[0] is the MSB
+          last_user_ID =
+            (uint32_t)mfrc522.uid.uidByte[3] |
+            (uint32_t)mfrc522.uid.uidByte[2] << 8 |
+            (uint32_t)mfrc522.uid.uidByte[1] << 16 |
+            (uint32_t)mfrc522.uid.uidByte[0] << 24;
            #ifdef DEBUGRFID
-            Serial.println(F("\n\nCARD FOUND"));
+            Serial.print(F("\n\nCard uid bytes: "));
+            dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
+            Serial.print(F(" UID: "));  
+            Serial.println(last_user_ID);
            #endif 
             // Check if the RTC is still reliable...
             if (Rtc.IsDateTimeValid())      
@@ -284,6 +300,7 @@ void print(const __FlashStringHelper *message, int code = -1){
 }
 
 void displayText(char* text, uint8_t textSize) {
+  display.clearDisplay();
   display.setCursor(0,0);
   display.setTextSize(textSize);
   display.setTextColor(WHITE);
@@ -450,4 +467,15 @@ time_t setRTCTime() {
   tm_time.tm_sec  = seconds;
   tm_time.tm_isdst = 0;
   return mktime(&tm_time);
+}
+
+
+/**
+ * Helper routine to dump a byte array as hex values to Serial.
+ */
+void dump_byte_array(byte *buffer, byte bufferSize) {
+    for (byte i = 0; i < bufferSize; i++) {
+        Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+        Serial.print(buffer[i], HEX);
+    }
 }
