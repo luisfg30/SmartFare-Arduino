@@ -27,6 +27,7 @@
 #define DEBUGRFID
 // #define DEBUGGPS
 
+
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
@@ -36,7 +37,8 @@ uint32_t last_user_ID;
 
 RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
-bool RTC_started = 0;
+static bool RTC_started = 0;
+
 
 // GPS variables
 volatile uint8_t dollar_counter = 0;
@@ -121,10 +123,11 @@ void setup() {
     ,  (const portCHAR *) "GPS"
     ,  512  // Stack size
     ,  NULL
-    ,  3  // Priority
+    ,  2  // Priority
     ,  NULL );
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
+   vTaskStartScheduler();
 }
 
 // the loop routine runs over and over again forever:
@@ -149,7 +152,7 @@ char incomingByte = 0;
 
     if (Serial1.available() > 0) {
       incomingByte = Serial1.read();
-      #ifdef DEBUGGPS
+      #ifdef DEBUGGPS 
         Serial.print(incomingByte);
       #endif
       if (incomingByte == '$') {
@@ -168,20 +171,18 @@ char incomingByte = 0;
                   setLedRGB(0,0,0);
                   displayText("Aproxime o cartao", 2);
                 }
+                #ifdef DEBUGGPS 
                   setLedRGB(0,0,1);
                   vTaskDelay( 100 / portTICK_PERIOD_MS );
                   setLedRGB(1,1,0);
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA OK"));
                   displayGPSData();
-                #endif            
-              } else {  
-                  setLedRGB(1,0,0);
-                  vTaskDelay( 100 / portTICK_PERIOD_MS );
-                  setLedRGB(1,1,0); 
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA INVALIDO")); 
-                 #endif  
+                #endif
+              } else {
+                  if (RTC_started == 0) {
+                    setLedRGB(1,0,0);
+                    vTaskDelay( 100 / portTICK_PERIOD_MS );
+                    setLedRGB(1,1,0); 
+                  }
               }
             } 
         }
@@ -196,9 +197,8 @@ char incomingByte = 0;
 void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  #ifdef DEBUGSERIAL
-    Serial.println(F("task GSM created"));
-  #endif
+  
+  Serial.println(F("task GSM created"));
   // testPOST();
 
 
@@ -211,9 +211,7 @@ void TaskGSM(void *pvParameters)  // This is a task.
 void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  #ifdef DEBUGSERIAL
-    Serial.println(F("task RFID created"));
-  #endif  
+  Serial.println(F("task RFID created"));
   for (;;)
   {
       // Look for new cards in RFID2
