@@ -1,6 +1,6 @@
 #include "SmartFareUtils.h"
 
-int getUserByID(uint32_t userId, UserInfo_T *usersBuffer) {
+int getUserByID(uint32_t userId, UserData_t *usersBuffer) {
 
 	int i;
 
@@ -13,9 +13,9 @@ int getUserByID(uint32_t userId, UserInfo_T *usersBuffer) {
 	return -1;
 }
 
-void addNewUser(uint32_t userId, UserInfo_T userData) {
+void addNewUser(uint32_t userId, UserData_t userData) {
 	// //create new user struct
-	// UserInfo_T new_user;
+	// UserData_t new_user;
 
 	// //assign initial values
 	// new_user.userId = userId;

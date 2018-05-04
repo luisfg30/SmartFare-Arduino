@@ -27,7 +27,7 @@ typedef struct {
 	char timestamp[20]; //UTC timestamp
 	char latitude[15];
 	char longitude[15];				 
-} UserInfo_T;
+} UserData_t;
 
 // Used to show proper massages in the LCD displays
 typedef enum __UserStatus {
@@ -39,6 +39,6 @@ typedef enum __UserStatus {
 	USTATUS_TAP_OUT,	   // user get out of the vehicle, new_balance >
 						   // minimum_balance
 	USTATUS_TAP_OUT_LOW_BALANCE
-} UserStatus;
+} UserStatus_t;
 
 #endif /* INC_SMARTFAREDATA_H_ */

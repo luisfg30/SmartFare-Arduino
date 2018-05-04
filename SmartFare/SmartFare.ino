@@ -11,6 +11,7 @@
 #include "RTCtimeUtils.h"
 #include <RtcDS1307.h>
 #include <Wire.h>
+#include "rfid_utils.h"
 
 /*******************************************************************************
  * Pin Configuration
@@ -32,8 +33,7 @@
  * Public types/enumerations/variables
  ******************************************************************************/
 
-static UserInfo_T tapInEvents[USER_BUFFER_SIZE];
-uint32_t last_user_ID;
+static UserData_t tapInEvents[USER_BUFFER_SIZE];
 
 RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
@@ -163,13 +163,9 @@ char incomingByte = 0;
             if(GPRMC_received == 1) {
               if (NMEA_valid == 1) {
                 if (RTC_started == 0) {
-                  // Format data
-                  // Start RTC
                   time_t startTime = setRTCTime();
                   Rtc.SetTime(&startTime);
                   RTC_started = 1;
-                  setLedRGB(0,0,0);
-                  displayText("Aproxime o cartao", 2);
                 }
                 #ifdef DEBUGGPS 
                   setLedRGB(0,0,1);
@@ -211,20 +207,32 @@ void TaskGSM(void *pvParameters)  // This is a task.
 void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
+  UserData_t lastUserData;
+  char balanceString[6];
+  int lastBalance;
+
   Serial.println(F("task RFID created"));
   for (;;)
   {
+      setLedRGB(0,0,0);
+      displayText("Aproxime o cartao", 2);
       // Look for new cards in RFID2
       if (mfrc522.PICC_IsNewCardPresent()) {
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
-          setLedRGB(0,1,0);
-          vTaskDelay( 100 / portTICK_PERIOD_MS );
-          setLedRGB(0,0,0);
+          lastBalance = readCardBalance(mfrc522);
+          if (lastBalance != (-999)) {
+            displayBalance(lastBalance);
+            setLedRGB(0, 1, 0);
+            lastUserData.balance = lastBalance;
+          } else {
+            displayText("Cartao naocadastrado", 2);
+            setLedRGB(0, 0, 1);
+          }
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
 
           // Convert the uid bytes to an integer, byte[0] is the MSB
-          last_user_ID =
+          lastUserData.userId =
             (uint32_t)mfrc522.uid.uidByte[3] |
             (uint32_t)mfrc522.uid.uidByte[2] << 8 |
             (uint32_t)mfrc522.uid.uidByte[1] << 16 |
@@ -233,9 +241,10 @@ void TaskRFID(void *pvParameters)  // This is a task.
             Serial.print(F("\n\nCard uid bytes: "));
             dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
             Serial.print(F(" UID: "));  
-            Serial.println(last_user_ID);
-           #endif 
-            // Check if the RTC is still reliable...
+            Serial.println(lastUserData.userId);
+           #endif
+            
+            // Record timestamp
             if (Rtc.IsDateTimeValid())      
             {
               time_t now = Rtc.GetTime();
@@ -244,17 +253,29 @@ void TaskRFID(void *pvParameters)  // This is a task.
               gmtime_r(&now, &utc_tm);      
               char utc_timestamp[20];
               strcpy(utc_timestamp, isotime(&utc_tm));
+              strcpy(lastUserData.timestamp,utc_timestamp); 
               #ifdef DEBUGSERIAL
                 Serial.print(F("UTC timestamp: "));
-                Serial.print(utc_timestamp);
+                Serial.println(lastUserData.timestamp);
               #endif
             }
-           digitalWrite(LED_BLUE, HIGH);  
-           vTaskDelay( 100 / portTICK_PERIOD_MS );                
-           digitalWrite(LED_BLUE, LOW);   
+
+           // Record coordinates
+           strcpy(lastUserData.latitude, gps_data_parsed.latitude); 
+           strcat(lastUserData.latitude, gps_data_parsed.latituteSign);
+           strcpy(lastUserData.longitude, gps_data_parsed.longitude);
+           strcat(lastUserData.longitude, gps_data_parsed.longitudeSign);
+
+           #ifdef DEBUGRFID
+            Serial.print(F("balance: ")); Serial.println(lastBalance);
+            Serial.print(F("lat: ")); Serial.print(lastUserData.latitude);
+            Serial.print(F("long: ")); Serial.println(lastUserData.longitude);
+           #endif
+
         }
       }
-      vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
+      // Wait for another user card
+      vTaskDelay( 1500 / portTICK_PERIOD_MS ); 
   }
 }
 
@@ -303,6 +324,22 @@ void displayText(char* text, uint8_t textSize) {
   display.setTextSize(textSize);
   display.setTextColor(WHITE);
   display.print(text);
+  display.display();
+}
+
+void displayBalance(int balance) {
+  char balanceString[16];
+  if(balance < 0) {
+    sprintf(balanceString , "R$ -%d,%.2d", 0-balance/100, 0-balance%100);
+  } else {
+      sprintf(balanceString, "R$ %d,%.2d", balance/100, balance%100);
+  }
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.setTextColor(WHITE);
+  display.setTextSize(2);
+  display.println("Saldo: ");
+  display.print(balanceString);
   display.display();
 }
 

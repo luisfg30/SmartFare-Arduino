@@ -11,7 +11,7 @@
 int getUserByID(uint32_t userId);
 
 /**
- * Create an UserInfo_T instance with boarding data and stores it int the
+ * Create an UserData_t instance with boarding data and stores it int the
  * usersBuffer
  * @param userID user unique identification number in the system
  */
