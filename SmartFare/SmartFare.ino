@@ -1,18 +1,22 @@
-
-#include "Http.h"
+// freeRTOS files
 #include "Arduino_FreeRTOS.h"
 #include "timers.h"
 #include "event_groups.h"
+// Standard C libraries
+#include <stdio.h>
+#include <time.h>
+// Third part libraries
+#include "Http.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
-#include <SPI.h>
-#include <MFRC522.h>
-#include <stdio.h>
-#include "SmartFareData.h"
-#include <time.h>
+#include "MFRC522.h"
 #include "RTCtimeUtils.h"
-#include <RtcDS1307.h>
+#include "RtcDS1307.h"
+// Arduino libraries
 #include <Wire.h>
+#include <SPI.h>
+// Smartfare files
+#include "SmartFareData.h"
 #include "rfid_utils.h"
 #include "SmartFareUtils.h"
 
