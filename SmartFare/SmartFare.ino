@@ -1,6 +1,8 @@
 
 #include "Http.h"
 #include "Arduino_FreeRTOS.h"
+#include "timers.h"
+#include "event_groups.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
 #include <SPI.h>
@@ -29,10 +31,15 @@
 #define DEBUGRFID
 // #define DEBUGGPS
 
+#define TIMER_PERIOD 3000 / portTICK_PERIOD_MS
+#define SYNC_EVENT_BIT ( 1UL << 0UL )
 
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
+
+TimerHandle_t syncTimer;
+EventGroupHandle_t xEventGroup;
 
 static UserData_t tapInEvents[USER_BUFFER_SIZE];
 static uint8_t inIndex = 0;
@@ -79,6 +86,13 @@ void setup() {
 
   Rtc.Begin();
 
+  // Create ventGroup
+  xEventGroup = xEventGroupCreate();
+
+  // Create a oneshot timer
+syncTimer = xTimerCreate("SyncTimer", TIMER_PERIOD , pdFALSE, 0, 
+syncTimerCallback );
+
   // Init LED pins
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -115,7 +129,7 @@ void setup() {
     ,  (const portCHAR *)"GSM"   // A name just for humans
     ,  512  // This stack size can be checked & adjusted by reading the Stack Highwater
     ,  NULL
-    ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
+    ,  2  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
     ,  NULL );
 
   xTaskCreate(
@@ -123,7 +137,7 @@ void setup() {
     ,  (const portCHAR *) "RFID"
     ,  512  // Stack size
     ,  NULL
-    ,  2  // Priority
+    ,  1  // Priority
     ,  NULL );
 
       xTaskCreate(
@@ -131,7 +145,7 @@ void setup() {
     ,  (const portCHAR *) "GPS"
     ,  512  // Stack size
     ,  NULL
-    ,  2  // Priority
+    ,  1  // Priority
     ,  NULL );
 
   // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
@@ -201,14 +215,33 @@ char incomingByte = 0;
 void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  
-  Serial.println(F("task GSM created"));
-  // testPOST();
+   Serial.println(F("task GSM created"));
 
+  EventBits_t xEventGroupValue;
+  const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
 
   for (;;) // A Task shall never return or exit.
   {
-            
+    // Block to wait for event bits to become set within the event group
+    xEventGroupValue = xEventGroupWaitBits(
+    xEventGroup,
+    xBitsToWaitFor,
+    // Clear bits on exit if the unblock condition is met.
+    pdTRUE,
+    // Don't wait for all bits
+    pdFALSE,
+    // Don't time out. Wait forever
+    portMAX_DELAY );
+
+    if( ( xEventGroupValue & SYNC_EVENT_BIT ) != 0 ) {
+      setLedRGB(1,0,1);
+      displayText("Sincronizando", 2);  
+      int i;
+      for(i = 0; i< 10; i++ ){
+        Serial.println(F("TASK GSM EXECUTANDO"));
+      }
+      // testPOST();   
+    }
   }
 }
 
@@ -217,7 +250,6 @@ void TaskRFID(void *pvParameters)  // This is a task.
   (void) pvParameters;
   UserData_t lastUserData;
   char balanceString[6];
-  int lastBalance;
 
   Serial.println(F("task RFID created"));
   for (;;)
@@ -228,11 +260,10 @@ void TaskRFID(void *pvParameters)  // This is a task.
       if (mfrc522.PICC_IsNewCardPresent()) {
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
-          lastBalance = readCardBalance(mfrc522);
-          if (lastBalance != (-999)) {
-            displayBalance(lastBalance);
+          lastUserData.balance = readCardBalance(mfrc522);
+          if (lastUserData.balance != (-999)) {
+            displayBalance(lastUserData.balance);
             setLedRGB(0, 1, 0);
-            lastUserData.balance = lastBalance;
           } else {
             displayText("Cartao naocadastrado", 2);
             setLedRGB(0, 0, 1);
@@ -275,7 +306,7 @@ void TaskRFID(void *pvParameters)  // This is a task.
            strcat(lastUserData.longitude, gps_data_parsed.longitudeSign);
 
            #ifdef DEBUGRFID
-            Serial.print(F("balance: ")); Serial.println(lastBalance);
+            Serial.print(F("balance: ")); Serial.println(lastUserData.balance);
             Serial.print(F("lat: ")); Serial.println(lastUserData.latitude);
             Serial.print(F("long: ")); Serial.println(lastUserData.longitude);
            #endif
@@ -308,9 +339,10 @@ void TaskRFID(void *pvParameters)  // This is a task.
             onBoardIndex --;
             onBoardUsers[onBoardIndex] = 0;
 
-            if(lastUserData.balance != -999 ){
+            if(lastUserData.balance != (-999) ){
               // Calculate fare
               // Write new balance to card;
+              displayText("tarifa:",2);
             }
           }
           #ifdef DEBUGRFID
@@ -323,10 +355,19 @@ void TaskRFID(void *pvParameters)  // This is a task.
             }
           #endif
         }
+      // Reset SyncTimer
+      xTimerStart(syncTimer, 0);
       }
       // Wait for another user card
       vTaskDelay( 1500 / portTICK_PERIOD_MS ); 
   }
+}
+
+// Timer callback function
+static void syncTimerCallback( TimerHandle_t xTimer )
+{
+  Serial.print(F("\n\nTIMER CALLBACK"));
+  xEventGroupSetBits( xEventGroup, SYNC_EVENT_BIT );
 }
 
 /*--------------------------------------------------*/
