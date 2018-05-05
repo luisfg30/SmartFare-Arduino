@@ -1,11 +1,10 @@
 #include "SmartFareUtils.h"
 
-int getUserByID(uint32_t userId, UserData_t *usersBuffer) {
+int getUserByID(uint32_t userId, uint32_t *usersBuffer) {
 
 	int i;
-
 	for (i = 0; i < USER_BUFFER_SIZE; i++) {
-		if (userId == usersBuffer[i].userId) {
+		if (userId == usersBuffer[i]) {
 			return i;
 		}
 	}

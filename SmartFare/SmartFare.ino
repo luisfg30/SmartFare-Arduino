@@ -12,6 +12,7 @@
 #include <RtcDS1307.h>
 #include <Wire.h>
 #include "rfid_utils.h"
+#include "SmartFareUtils.h"
 
 /*******************************************************************************
  * Pin Configuration
@@ -34,6 +35,13 @@
  ******************************************************************************/
 
 static UserData_t tapInEvents[USER_BUFFER_SIZE];
+static uint8_t inIndex = 0;
+
+static UserData_t tapOutEvents[USER_BUFFER_SIZE];
+static uint8_t outIndex = 0;
+
+static uint32_t onBoardUsers[USER_BUFFER_SIZE];
+static uint8_t onBoardIndex;
 
 RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
@@ -268,10 +276,52 @@ void TaskRFID(void *pvParameters)  // This is a task.
 
            #ifdef DEBUGRFID
             Serial.print(F("balance: ")); Serial.println(lastBalance);
-            Serial.print(F("lat: ")); Serial.print(lastUserData.latitude);
+            Serial.print(F("lat: ")); Serial.println(lastUserData.latitude);
             Serial.print(F("long: ")); Serial.println(lastUserData.longitude);
            #endif
 
+          // Check if user is on vehicle
+          int userIndex = getUserByID(lastUserData.userId, onBoardUsers);
+          Serial.print("userIndex: "); Serial.println(userIndex);
+          if( userIndex == -1) {
+            onBoardUsers[onBoardIndex] = lastUserData.userId;
+            onBoardIndex++;
+            onBoardIndex %= USER_BUFFER_SIZE;
+            // Add user to tapIn buffer
+            tapInEvents[inIndex] = lastUserData;
+            inIndex++;
+            inIndex %= USER_BUFFER_SIZE;
+          }
+          else {
+            // Add user to tapOut buffer
+            tapOutEvents[outIndex] = lastUserData;
+            outIndex++;
+            outIndex %= USER_BUFFER_SIZE;
+            // Remove user from onBoardUsers buffer;
+            if (userIndex != onBoardIndex - 1){// not in the last position
+              // shift all other elements left
+              uint8_t i; 
+              for (i = userIndex ; i < onBoardIndex - 1; i ++){
+                onBoardUsers[i] = onBoardUsers[i + 1];
+              }
+            }
+            onBoardIndex --;
+            onBoardUsers[onBoardIndex] = 0;
+
+            if(lastUserData.balance != -999 ){
+              // Calculate fare
+              // Write new balance to card;
+            }
+          }
+          #ifdef DEBUGRFID
+            Serial.print("onBoardIndex: ");Serial.print(onBoardIndex); 
+            Serial.print(" inIndex: "); Serial.print(inIndex);
+            Serial.print(" outIndex: "); Serial.println(outIndex);
+            uint8_t j;
+            for (j = 0; j < USER_BUFFER_SIZE; j++) {
+              Serial.print(" ");Serial.print(onBoardUsers[j]);
+            }
+          #endif
         }
       }
       // Wait for another user card

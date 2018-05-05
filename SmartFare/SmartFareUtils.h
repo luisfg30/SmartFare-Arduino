@@ -8,7 +8,7 @@
  * @param  userID the iD to search for
  * @return        the index of the user in the usersBuffer
  */
-int getUserByID(uint32_t userId);
+int getUserByID(uint32_t userId, uint32_t *usersBuffer);
 
 /**
  * Create an UserData_t instance with boarding data and stores it int the
