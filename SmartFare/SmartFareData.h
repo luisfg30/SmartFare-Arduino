@@ -22,22 +22,12 @@ typedef struct {
 
 // Structure used to store user Data
 typedef struct {
-	uint32_t userId; // the PICC used stores a 4 byte user ID
-// 	unsigned int vehicleId;
-// 	unsigned int fare;
-// 	int balance;  // the user balance in cents, may be negative
-// 	unsigned int distance; // last travel fare calculated
-// 	unsigned int
-// 		inOdometerMeasure; // vehicle odometer read when user get on board
-// //	RTC_TIME_T inTimestamp;
-// 	float inLatitude;				 // Latitude when user get on board
-// 	float inLongitude;				 // Longitude when user get on board
-// 	unsigned int outOdometerMeasure; // vehicle odometer read when user get out
-// 									 // of the vehicle
-// //	RTC_TIME_T outTimestamp;
-// 	float outLatitude;  // Latitude when user get out of the vehicle
-// 	float outLongitude; // Longitude when user get out of the vehicle
-} UserInfo_T;
+	uint32_t userId; 	// The PICC used stores a 4 byte user ID
+ 	int balance;  		// The user balance in cents, may be negative
+	char timestamp[20]; //UTC timestamp
+	char latitude[15];
+	char longitude[15];				 
+} UserData_t;
 
 // Used to show proper massages in the LCD displays
 typedef enum __UserStatus {
@@ -49,6 +39,6 @@ typedef enum __UserStatus {
 	USTATUS_TAP_OUT,	   // user get out of the vehicle, new_balance >
 						   // minimum_balance
 	USTATUS_TAP_OUT_LOW_BALANCE
-} UserStatus;
+} UserStatus_t;
 
 #endif /* INC_SMARTFAREDATA_H_ */

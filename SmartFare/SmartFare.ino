@@ -1,16 +1,24 @@
-
-#include "Http.h"
+// freeRTOS files
 #include "Arduino_FreeRTOS.h"
+#include "timers.h"
+#include "event_groups.h"
+// Standard C libraries
+#include <stdio.h>
+#include <time.h>
+// Third part libraries
+#include "Http.h"
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1306.h"
-#include <SPI.h>
-#include <MFRC522.h>
-#include <stdio.h>
-#include "SmartFareData.h"
-#include <time.h>
+#include "MFRC522.h"
 #include "RTCtimeUtils.h"
-#include <RtcDS1307.h>
+#include "RtcDS1307.h"
+// Arduino libraries
 #include <Wire.h>
+#include <SPI.h>
+// Smartfare files
+#include "SmartFareData.h"
+#include "rfid_utils.h"
+#include "SmartFareUtils.h"
 
 /*******************************************************************************
  * Pin Configuration
@@ -25,15 +33,31 @@
 #define GPS_BAUD_RATE       9600 
 #define DEBUGSERIAL
 #define DEBUGRFID
-#define DEBUGGPS
+// #define DEBUGGPS
+
+#define TIMER_PERIOD 3000 / portTICK_PERIOD_MS
+#define SYNC_EVENT_BIT ( 1UL << 0UL )
 
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
 
+TimerHandle_t syncTimer;
+EventGroupHandle_t xEventGroup;
+
+static UserData_t tapInEvents[USER_BUFFER_SIZE];
+static uint8_t inIndex = 0;
+
+static UserData_t tapOutEvents[USER_BUFFER_SIZE];
+static uint8_t outIndex = 0;
+
+static uint32_t onBoardUsers[USER_BUFFER_SIZE];
+static uint8_t onBoardIndex;
+
 RtcDS1307<TwoWire> Rtc(Wire);
 // Global flags
-bool RTC_started = 0;
+static bool RTC_started = 0;
+
 
 // GPS variables
 volatile uint8_t dollar_counter = 0;
@@ -66,6 +90,13 @@ void setup() {
 
   Rtc.Begin();
 
+  // Create ventGroup
+  xEventGroup = xEventGroupCreate();
+
+  // Create a oneshot timer
+syncTimer = xTimerCreate("SyncTimer", TIMER_PERIOD , pdFALSE, 0, 
+syncTimerCallback );
+
   // Init LED pins
   pinMode(LED_RED, OUTPUT);
   pinMode(LED_GREEN, OUTPUT);
@@ -93,39 +124,16 @@ void setup() {
     Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
   #endif
   // First message
-    setLedRGB(1,1,0);
-    display.clearDisplay();
-    displayText("Iniciando RTC", 2); 
+  setLedRGB(1,1,0);
+  displayText("Iniciando RTC", 2); 
 
-   // Now set up two tasks to run independently.
-  xTaskCreate(
-    TaskGSM
-    ,  (const portCHAR *)"GSM"   // A name just for humans
-    ,  512  // This stack size can be checked & adjusted by reading the Stack Highwater
-    ,  NULL
-    ,  1  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
-    ,  NULL );
-
-  xTaskCreate(
-    TaskRFID
-    ,  (const portCHAR *) "RFID"
-    ,  512  // Stack size
-    ,  NULL
-    ,  2  // Priority
-    ,  NULL );
-
-      xTaskCreate(
-    TaskGPS
-    ,  (const portCHAR *) "GPS"
-    ,  512  // Stack size
-    ,  NULL
-    ,  3  // Priority
-    ,  NULL );
-
-  // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
+  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest
+  xTaskCreate(TaskGSM , (const portCHAR *)"GSM", 512, NULL, 3, NULL);
+  xTaskCreate(TaskRFID, (const portCHAR *) "RFID", 512, NULL, 2,NULL);
+  xTaskCreate(TaskGPS, (const portCHAR *) "GPS", 512 , NULL, 1, NULL);
+  vTaskStartScheduler();
 }
 
-// the loop routine runs over and over again forever:
 void loop() {
   // Empty. Things are done in Tasks.
 }
@@ -147,7 +155,7 @@ char incomingByte = 0;
 
     if (Serial1.available() > 0) {
       incomingByte = Serial1.read();
-      #ifdef DEBUGGPS
+      #ifdef DEBUGGPS 
         Serial.print(incomingByte);
       #endif
       if (incomingByte == '$') {
@@ -158,27 +166,22 @@ char incomingByte = 0;
             if(GPRMC_received == 1) {
               if (NMEA_valid == 1) {
                 if (RTC_started == 0) {
-                  // Format data
-                  // Start RTC
                   time_t startTime = setRTCTime();
                   Rtc.SetTime(&startTime);
                   RTC_started = 1;
-                  setLedRGB(0,0,0);
                 }
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA OK"));
+                #ifdef DEBUGGPS 
                   setLedRGB(0,0,1);
                   vTaskDelay( 100 / portTICK_PERIOD_MS );
                   setLedRGB(1,1,0);
                   displayGPSData();
-                #endif            
+                #endif
               } else {
-                #ifdef DEBUGGPS
-                  Serial.println(F("NMEA INVALIDO"));
-                  setLedRGB(1,0,0);
-                  vTaskDelay( 100 / portTICK_PERIOD_MS );
-                  setLedRGB(1,1,0);    
-                 #endif  
+                  if (RTC_started == 0) {
+                    setLedRGB(1,0,0);
+                    vTaskDelay( 100 / portTICK_PERIOD_MS );
+                    setLedRGB(1,1,0); 
+                  }
               }
             } 
         }
@@ -193,35 +196,75 @@ char incomingByte = 0;
 void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  #ifdef DEBUGSERIAL
-    Serial.println(F("task GSM created"));
-  #endif
-  // testPOST();
+   Serial.println(F("task GSM created"));
 
+  EventBits_t xEventGroupValue;
+  const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
 
-  for (;;) // A Task shall never return or exit.
+  for (;;) 
   {
-            
+    // Block to wait for event bits to become set within the event group
+    xEventGroupValue = xEventGroupWaitBits(
+    xEventGroup,
+    xBitsToWaitFor,
+    // Clear bits on exit if the unblock condition is met.
+    pdTRUE,
+    // Don't wait for all bits
+    pdFALSE,
+    // Don't time out. Wait forever
+    portMAX_DELAY );
+
+    if( ( xEventGroupValue & SYNC_EVENT_BIT ) != 0 ) {
+      setLedRGB(1,0,1);
+      displayText("Sincronizando", 2);  
+      int i;
+      for(i = 0; i< 10; i++ ){
+        Serial.println(F("TASK GSM EXECUTANDO"));
+      }
+      testPOST();   
+    }
   }
 }
 
 void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
-  #ifdef DEBUGSERIAL
-    Serial.println(F("task RFID created"));
-  #endif  
+  UserData_t lastUserData;
+  char balanceString[6];
+
+  Serial.println(F("task RFID created"));
   for (;;)
   {
+      setLedRGB(0,0,0);
+      displayText("Aproxime o cartao", 2);
       // Look for new cards in RFID2
       if (mfrc522.PICC_IsNewCardPresent()) {
         // Select one of the cards
         if (mfrc522.PICC_ReadCardSerial()) {
+          lastUserData.balance = readCardBalance(mfrc522);
+          if (lastUserData.balance != (-999)) {
+            displayBalance(lastUserData.balance);
+            setLedRGB(0, 1, 0);
+          } else {
+            displayText("Cartao naocadastrado", 2);
+            setLedRGB(0, 0, 1);
+          }
           //int status = writeCardBalance(mfrc2, 9999); // used to recharge the card
+
+          // Convert the uid bytes to an integer, byte[0] is the MSB
+          lastUserData.userId =
+            (uint32_t)mfrc522.uid.uidByte[3] |
+            (uint32_t)mfrc522.uid.uidByte[2] << 8 |
+            (uint32_t)mfrc522.uid.uidByte[1] << 16 |
+            (uint32_t)mfrc522.uid.uidByte[0] << 24;
            #ifdef DEBUGRFID
-            Serial.println(F("\n\nCARD FOUND"));
-           #endif 
-            // Check if the RTC is still reliable...
+            Serial.print(F("\n\nCard uid bytes: "));
+            dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
+            Serial.print(F(" UID: "));  
+            Serial.println(lastUserData.userId);
+           #endif
+            
+            // Record timestamp
             if (Rtc.IsDateTimeValid())      
             {
               time_t now = Rtc.GetTime();
@@ -230,18 +273,85 @@ void TaskRFID(void *pvParameters)  // This is a task.
               gmtime_r(&now, &utc_tm);      
               char utc_timestamp[20];
               strcpy(utc_timestamp, isotime(&utc_tm));
+              strcpy(lastUserData.timestamp,utc_timestamp); 
               #ifdef DEBUGSERIAL
                 Serial.print(F("UTC timestamp: "));
-                Serial.print(utc_timestamp);
+                Serial.println(lastUserData.timestamp);
               #endif
             }
-           digitalWrite(LED_BLUE, HIGH);  
-           vTaskDelay( 100 / portTICK_PERIOD_MS );                
-           digitalWrite(LED_BLUE, LOW);   
+
+           // Record coordinates
+           strcpy(lastUserData.latitude, gps_data_parsed.latitude); 
+           strcat(lastUserData.latitude, gps_data_parsed.latituteSign);
+           strcpy(lastUserData.longitude, gps_data_parsed.longitude);
+           strcat(lastUserData.longitude, gps_data_parsed.longitudeSign);
+
+           #ifdef DEBUGRFID
+            Serial.print(F("balance: ")); Serial.println(lastUserData.balance);
+            Serial.print(F("lat: ")); Serial.println(lastUserData.latitude);
+            Serial.print(F("long: ")); Serial.println(lastUserData.longitude);
+           #endif
+
+          // Check if user is on vehicle
+          int userIndex = getUserByID(lastUserData.userId, onBoardUsers);
+          Serial.print("userIndex: "); Serial.println(userIndex);
+          if( userIndex == -1) {
+            onBoardUsers[onBoardIndex] = lastUserData.userId;
+            onBoardIndex++;
+            onBoardIndex %= USER_BUFFER_SIZE;
+            // Add user to tapIn buffer
+            tapInEvents[inIndex] = lastUserData;
+            inIndex++;
+            inIndex %= USER_BUFFER_SIZE;
+          }
+          else {
+            // Add user to tapOut buffer
+            tapOutEvents[outIndex] = lastUserData;
+            outIndex++;
+            outIndex %= USER_BUFFER_SIZE;
+            // Remove user from onBoardUsers buffer;
+            if (userIndex != onBoardIndex - 1){// not in the last position
+              // shift all other elements left
+              uint8_t i; 
+              for (i = userIndex ; i < onBoardIndex - 1; i ++){
+                onBoardUsers[i] = onBoardUsers[i + 1];
+              }
+            }
+            onBoardIndex --;
+            onBoardUsers[onBoardIndex] = 0;
+
+            if(lastUserData.balance != (-999) ){
+              // Calculate fare
+              // Write new balance to card;
+              displayText("tarifa:",2);
+            }
+          }
+          #ifdef DEBUGRFID
+            Serial.print("onBoardIndex: ");Serial.print(onBoardIndex); 
+            Serial.print(" inIndex: "); Serial.print(inIndex);
+            Serial.print(" outIndex: "); Serial.println(outIndex);
+            uint8_t j;
+            for (j = 0; j < USER_BUFFER_SIZE; j++) {
+              Serial.print(" ");Serial.print(onBoardUsers[j]);
+            }
+          #endif
         }
+      // Reset SyncTimer
+      xTimerStart(syncTimer, 0);
       }
-      vTaskDelay( 1000 / portTICK_PERIOD_MS ); // wait for one second
+      // Wait for another user card
+      vTaskDelay( 1500 / portTICK_PERIOD_MS ); 
   }
+}
+
+/**
+ * @brief Set an eventGRoup bit to wake up the GSM task
+ * 
+ * @param xTimer 
+ */
+static void syncTimerCallback( TimerHandle_t xTimer )
+{
+  xEventGroupSetBits( xEventGroup, SYNC_EVENT_BIT );
 }
 
 /*--------------------------------------------------*/
@@ -253,13 +363,12 @@ void testPOST(){
   char response[32];
   char body[90];
   Result result;
-
+  
 //  print(F("Cofigure bearer: "), http.configureBearer("zap.vivo.com.br"));
   print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
   result = http.connect();
   print(F("HTTP connect: "), result);
 
-  
   result = http.post("ptsv2.com/t/1etbw-1520389850/post", "{\"date\":\"12345678\"}", response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
@@ -284,10 +393,27 @@ void print(const __FlashStringHelper *message, int code = -1){
 }
 
 void displayText(char* text, uint8_t textSize) {
+  display.clearDisplay();
   display.setCursor(0,0);
   display.setTextSize(textSize);
   display.setTextColor(WHITE);
   display.print(text);
+  display.display();
+}
+
+void displayBalance(int balance) {
+  char balanceString[16];
+  if(balance < 0) {
+    sprintf(balanceString , "R$ -%d,%.2d", 0-balance/100, 0-balance%100);
+  } else {
+      sprintf(balanceString, "R$ %d,%.2d", balance/100, balance%100);
+  }
+  display.clearDisplay();
+  display.setCursor(0,0);
+  display.setTextColor(WHITE);
+  display.setTextSize(2);
+  display.println("Saldo: ");
+  display.print(balanceString);
   display.display();
 }
 
@@ -450,4 +576,15 @@ time_t setRTCTime() {
   tm_time.tm_sec  = seconds;
   tm_time.tm_isdst = 0;
   return mktime(&tm_time);
+}
+
+
+/**
+ * Helper routine to dump a byte array as hex values to Serial.
+ */
+void dump_byte_array(byte *buffer, byte bufferSize) {
+    for (byte i = 0; i < bufferSize; i++) {
+        Serial.print(buffer[i] < 0x10 ? " 0" : " ");
+        Serial.print(buffer[i], HEX);
+    }
 }
