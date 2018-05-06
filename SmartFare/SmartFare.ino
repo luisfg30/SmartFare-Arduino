@@ -12,6 +12,7 @@
 #include "MFRC522.h"
 #include "RTCtimeUtils.h"
 #include "RtcDS1307.h"
+#include "ArduinoJson.h"
 // Arduino libraries
 #include <Wire.h>
 #include <SPI.h>
@@ -359,7 +360,9 @@ static void syncTimerCallback( TimerHandle_t xTimer )
 /*--------------------------------------------------*/
 
 void testPOST(){
-  
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  char jsonString[200];
   char response[32];
   char body[90];
   Result result;
@@ -369,7 +372,10 @@ void testPOST(){
   result = http.connect();
   print(F("HTTP connect: "), result);
 
-  result = http.post("ptsv2.com/t/1etbw-1520389850/post", "{\"date\":\"12345678\"}", response);
+  root["userId"] = tapInEvents[0].userId;
+  root.printTo(jsonString);
+  char test[] = "{\"test\":\"tesvalue\"}";
+  result = http.post("ptsv2.com/t/1etbw-1520389850/post", test, response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
     #ifdef DEBUGSERIAL
