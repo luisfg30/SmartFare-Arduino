@@ -363,13 +363,12 @@ void testPOST(){
   char response[32];
   char body[90];
   Result result;
-   Serial.print(F("TESTPOST"));
+  
 //  print(F("Cofigure bearer: "), http.configureBearer("zap.vivo.com.br"));
   print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
   result = http.connect();
   print(F("HTTP connect: "), result);
 
-  Serial.print(F("TESTPOST2"));
   result = http.post("ptsv2.com/t/1etbw-1520389850/post", "{\"date\":\"12345678\"}", response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
