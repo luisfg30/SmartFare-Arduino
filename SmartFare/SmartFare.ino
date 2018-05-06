@@ -124,39 +124,16 @@ syncTimerCallback );
     Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
   #endif
   // First message
-    setLedRGB(1,1,0);
-    displayText("Iniciando RTC", 2); 
+  setLedRGB(1,1,0);
+  displayText("Iniciando RTC", 2); 
 
-   // Now set up two tasks to run independently.
-  xTaskCreate(
-    TaskGSM
-    ,  (const portCHAR *)"GSM"   // A name just for humans
-    ,  512  // This stack size can be checked & adjusted by reading the Stack Highwater
-    ,  NULL
-    ,  2  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest.
-    ,  NULL );
-
-  xTaskCreate(
-    TaskRFID
-    ,  (const portCHAR *) "RFID"
-    ,  512  // Stack size
-    ,  NULL
-    ,  1  // Priority
-    ,  NULL );
-
-      xTaskCreate(
-    TaskGPS
-    ,  (const portCHAR *) "GPS"
-    ,  512  // Stack size
-    ,  NULL
-    ,  1  // Priority
-    ,  NULL );
-
-  // Now the task scheduler, which takes over control of scheduling individual tasks, is automatically started.
-   vTaskStartScheduler();
+  // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest
+  xTaskCreate(TaskGSM , (const portCHAR *)"GSM", 512, NULL, 3, NULL);
+  xTaskCreate(TaskRFID, (const portCHAR *) "RFID", 512, NULL, 2,NULL);
+  xTaskCreate(TaskGPS, (const portCHAR *) "GPS", 512 , NULL, 1, NULL);
+  vTaskStartScheduler();
 }
 
-// the loop routine runs over and over again forever:
 void loop() {
   // Empty. Things are done in Tasks.
 }
@@ -224,7 +201,7 @@ void TaskGSM(void *pvParameters)  // This is a task.
   EventBits_t xEventGroupValue;
   const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
 
-  for (;;) // A Task shall never return or exit.
+  for (;;) 
   {
     // Block to wait for event bits to become set within the event group
     xEventGroupValue = xEventGroupWaitBits(
@@ -244,7 +221,7 @@ void TaskGSM(void *pvParameters)  // This is a task.
       for(i = 0; i< 10; i++ ){
         Serial.println(F("TASK GSM EXECUTANDO"));
       }
-      // testPOST();   
+      testPOST();   
     }
   }
 }
@@ -367,10 +344,13 @@ void TaskRFID(void *pvParameters)  // This is a task.
   }
 }
 
-// Timer callback function
+/**
+ * @brief Set an eventGRoup bit to wake up the GSM task
+ * 
+ * @param xTimer 
+ */
 static void syncTimerCallback( TimerHandle_t xTimer )
 {
-  Serial.print(F("\n\nTIMER CALLBACK"));
   xEventGroupSetBits( xEventGroup, SYNC_EVENT_BIT );
 }
 
@@ -383,13 +363,13 @@ void testPOST(){
   char response[32];
   char body[90];
   Result result;
-
+   Serial.print(F("TESTPOST"));
 //  print(F("Cofigure bearer: "), http.configureBearer("zap.vivo.com.br"));
   print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
   result = http.connect();
   print(F("HTTP connect: "), result);
 
-  
+  Serial.print(F("TESTPOST2"));
   result = http.post("ptsv2.com/t/1etbw-1520389850/post", "{\"date\":\"12345678\"}", response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
