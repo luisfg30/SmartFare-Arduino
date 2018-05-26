@@ -1,3 +1,12 @@
 {
-    "C_Cpp.intelliSenseEngineFallback": "Enabled"
+    "C_Cpp.intelliSenseEngineFallback": "Enabled",
+    "files.associations": {
+        "bitset": "cpp",
+        "typeindex": "cpp",
+        "typeinfo": "cpp",
+        "rope": "cpp",
+        "*.tcc": "cpp",
+        "slist": "cpp",
+        "system_error": "cpp"
+    }
 }

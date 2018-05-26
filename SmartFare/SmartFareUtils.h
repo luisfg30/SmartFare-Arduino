@@ -1,8 +1,13 @@
-#include "SmartFareData.h"
+
 
 #ifndef INC_SMARTFAREUTILS_H_
 #define INC_SMARTFAREUTILS_H_
 
+#include "SmartFareData.h"
+#include "ArduinoJson.h"
+
+#define MAX_EVENTS 10
+#define JSON_SIZE 2000 
 /**
  * Search for a given userID, returns an index to it if found, -1 otherwise
  * @param  userID the iD to search for

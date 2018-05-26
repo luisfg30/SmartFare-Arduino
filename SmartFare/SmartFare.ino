@@ -32,16 +32,21 @@
 #define LED_BLUE            5
 
 #define GPS_BAUD_RATE       9600 
+#define GSM_BAUD_RATE       9600
 #define DEBUGSERIAL
 #define DEBUGRFID
 // #define DEBUGGPS
 
-#define TIMER_PERIOD 3000 / portTICK_PERIOD_MS
+#define TIMER_PERIOD 5000 / portTICK_PERIOD_MS
 #define SYNC_EVENT_BIT ( 1UL << 0UL )
 
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
+
+  StaticJsonBuffer<500> jsonBuffer;
+  JsonObject& root = jsonBuffer.createObject();
+  char jsonString[500];
 
 TimerHandle_t syncTimer;
 EventGroupHandle_t xEventGroup;
@@ -76,7 +81,7 @@ Adafruit_SSD1306 display(OLED_RESET);
 unsigned int SIM800_RX_PIN = 10; 
 unsigned int SIM800_TX_PIN = 11;
 unsigned int SIM800_RST_PIN = 12;
-HTTP http(9600, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, TRUE);
+HTTP http(GSM_BAUD_RATE, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, TRUE);
 
 // Tasks definition
 void TaskGSM( void *pvParameters );
@@ -129,7 +134,7 @@ syncTimerCallback );
   displayText("Iniciando RTC", 2); 
 
   // Priority, with 3 (configMAX_PRIORITIES - 1) being the highest, and 0 being the lowest
-  xTaskCreate(TaskGSM , (const portCHAR *)"GSM", 512, NULL, 3, NULL);
+  xTaskCreate(TaskGSM , (const portCHAR *)"GSM", 1024, NULL, 3, NULL);
   xTaskCreate(TaskRFID, (const portCHAR *) "RFID", 512, NULL, 2,NULL);
   xTaskCreate(TaskGPS, (const portCHAR *) "GPS", 512 , NULL, 1, NULL);
   vTaskStartScheduler();
@@ -217,12 +222,45 @@ void TaskGSM(void *pvParameters)  // This is a task.
 
     if( ( xEventGroupValue & SYNC_EVENT_BIT ) != 0 ) {
       setLedRGB(1,0,1);
-      displayText("Sincronizando", 2);  
+      displayText("Sincronizando", 2);
+
+      // Add events to JSON object
       int i;
-      for(i = 0; i< 10; i++ ){
-        Serial.println(F("TASK GSM EXECUTANDO"));
+      char s_userId[12];
+      char s_balance[12];
+      // tapInEvents
+      JsonArray& tapInEventsJSON = root.createNestedArray("tapInEvents");
+      for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
+        if (tapInEvents[i].userId != 0) {
+          JsonObject& eventIn = tapInEventsJSON.createNestedObject();
+          sprintf(s_userId, "%lu", tapInEvents[i].userId);
+          sprintf(s_balance, "%d", tapInEvents[i].balance);
+          eventIn["userID"] = s_userId;
+          eventIn["balance"] = s_balance;
+          eventIn["timestamp"] = tapInEvents[i].timestamp;
+          eventIn["latitude"] = tapInEvents[i].latitude;
+          eventIn["longitude"] = tapInEvents[i].longitude;
+        }
       }
+
+      // tapOut Events
+      JsonArray& tapOutEventsJSON = root.createNestedArray("tapOutEvents");
+      for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
+        if (tapOutEvents[i].userId != 0) {
+          JsonObject& eventOut = tapOutEventsJSON.createNestedObject();
+          sprintf(s_userId, "%lu", tapOutEvents[i].userId);
+          sprintf(s_balance, "%d", tapOutEvents[i].balance);
+          eventOut["userID"] = s_userId;
+          eventOut["balance"] = s_balance;
+          eventOut["timestamp"] = tapOutEvents[i].timestamp;
+          eventOut["latitude"] = tapOutEvents[i].latitude;
+          eventOut["longitude"] = tapOutEvents[i].longitude;
+        }
+      }
+
+      root.printTo(jsonString);
       testPOST();   
+      // jsonBuffer.clear();
     }
   }
 }
@@ -360,9 +398,6 @@ static void syncTimerCallback( TimerHandle_t xTimer )
 /*--------------------------------------------------*/
 
 void testPOST(){
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
-  char jsonString[200];
   char response[32];
   char body[90];
   Result result;
@@ -372,10 +407,8 @@ void testPOST(){
   result = http.connect();
   print(F("HTTP connect: "), result);
 
-  root["userId"] = tapInEvents[0].userId;
-  root.printTo(jsonString);
-  char test[] = "{\"test\":\"tesvalue\"}";
-  result = http.post("ptsv2.com/t/1etbw-1520389850/post", test, response);
+  // char test[] = "{\"test\":\"tesvalue\"}";
+  result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
   print(F("HTTP POST: "), result);
   if (result == SUCCESS) {
     #ifdef DEBUGSERIAL
