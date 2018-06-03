@@ -7,6 +7,8 @@
         "rope": "cpp",
         "*.tcc": "cpp",
         "slist": "cpp",
-        "system_error": "cpp"
+        "system_error": "cpp",
+        "scoped_allocator": "cpp",
+        "valarray": "cpp"
     }
 }

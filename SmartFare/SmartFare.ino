@@ -265,15 +265,34 @@ void TaskGSM(void *pvParameters)  // This is a task.
           root["longitude"] = eventsBuffer[i].longitude;
 
           root.printTo(jsonString);
+
+          // Save string to SD card
+          print(F("userId to print: "), s_userId);
           result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
           print(F("HTTP POST: "), result);
+
+          #ifdef DEBUGSERIAL
+            Serial.println(F("Server Response:"));
+            Serial.println(response);
+          #endif  
           if (result == SUCCESS) {
-            #ifdef DEBUGSERIAL
-              Serial.println(F("Server Response:"));
-              Serial.println(response);
-            #endif  
+            // Remove event from buffer
+            if (i != eventsIndex - 1){// not in the last position
+              // shift all other elements left
+              uint8_t j; 
+              for (j = i ; j < eventsIndex - 1; j ++){
+                eventsBuffer[j] = eventsBuffer[j + 1];
+              }
+            }
+            eventsIndex --;
+            eventsBuffer[eventsIndex].userId = 0;
           }
         }
+      }
+      Serial.print(F("Events index: "));Serial.print(eventsIndex);
+      uint8_t k;
+      for (k = 0; k < USER_BUFFER_SIZE; k++) {
+        Serial.print(" ");Serial.print(eventsBuffer[k].userId);
       }
   print(F("HTTP disconnect: "), http.disconnect());
     }
