@@ -26,7 +26,8 @@ typedef struct {
  	int balance;  		// The user balance in cents, may be negative
 	char timestamp[20]; //UTC timestamp
 	char latitude[15];
-	char longitude[15];				 
+	char longitude[15];	
+	uint8_t eventType; 	// 0 = tapIn, 1 = tapOut			 
 } UserData_t;
 
 // Used to show proper massages in the LCD displays

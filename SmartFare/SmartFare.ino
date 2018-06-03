@@ -44,18 +44,15 @@
  * Public types/enumerations/variables
  ******************************************************************************/
 
-  StaticJsonBuffer<500> jsonBuffer;
+  StaticJsonBuffer<200> jsonBuffer;
   JsonObject& root = jsonBuffer.createObject();
-  char jsonString[500];
+  char jsonString[200];
 
 TimerHandle_t syncTimer;
 EventGroupHandle_t xEventGroup;
 
-static UserData_t tapInEvents[USER_BUFFER_SIZE];
-static uint8_t inIndex = 0;
-
-static UserData_t tapOutEvents[USER_BUFFER_SIZE];
-static uint8_t outIndex = 0;
+static UserData_t eventsBuffer[USER_BUFFER_SIZE];
+static uint8_t eventsIndex = 0;
 
 static uint32_t onBoardUsers[USER_BUFFER_SIZE];
 static uint8_t onBoardIndex;
@@ -238,18 +235,20 @@ void TaskGSM(void *pvParameters)  // This is a task.
       int i;
       char s_userId[12];
       char s_balance[12];
-      // tapInEvents
-      // JsonArray& tapInEventsJSON = root.createNestedArray("tapInEvents");
+      char s_eventType[2];
+
+      // eventsBuffer
       for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
-        if (tapInEvents[i].userId != 0) {
-          // JsonObject& eventIn = tapInEventsJSON.createNestedObject();
-          sprintf(s_userId, "%lu", tapInEvents[i].userId);
-          sprintf(s_balance, "%d", tapInEvents[i].balance);
+        if (eventsBuffer[i].userId != 0) {
+          sprintf(s_userId, "%lu", eventsBuffer[i].userId);
+          sprintf(s_balance, "%d", eventsBuffer[i].balance);
+          sprintf(s_eventType, "%d",eventsBuffer[i].eventType);
+          root["eventType"] = s_eventType;
           root["userID"] = s_userId;
           root["balance"] = s_balance;
-          root["timestamp"] = tapInEvents[i].timestamp;
-          root["latitude"] = tapInEvents[i].latitude;
-          root["longitude"] = tapInEvents[i].longitude;
+          root["timestamp"] = eventsBuffer[i].timestamp;
+          root["latitude"] = eventsBuffer[i].latitude;
+          root["longitude"] = eventsBuffer[i].longitude;
 
           root.printTo(jsonString);
           result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
@@ -262,29 +261,7 @@ void TaskGSM(void *pvParameters)  // This is a task.
           }
         }
       }
-
-      // // tapOut Events
-      // JsonArray& tapOutEventsJSON = root.createNestedArray("tapOutEvents");
-      // for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
-      //   if (tapOutEvents[i].userId != 0) {
-      //     JsonObject& eventOut = tapOutEventsJSON.createNestedObject();
-      //     sprintf(s_userId, "%lu", tapOutEvents[i].userId);
-      //     sprintf(s_balance, "%d", tapOutEvents[i].balance);
-      //     eventOut["userID"] = s_userId;
-      //     eventOut["balance"] = s_balance;
-      //     eventOut["timestamp"] = tapOutEvents[i].timestamp;
-      //     eventOut["latitude"] = tapOutEvents[i].latitude;
-      //     eventOut["longitude"] = tapOutEvents[i].longitude;
-      //   }
-      // }
-
-      // root.printTo(jsonString);
-      // jsonBuffer.clear();
-
   print(F("HTTP disconnect: "), http.disconnect());
-
-      // testPOST();   
-      // jsonBuffer.clear();
     }
   }
 }
@@ -359,19 +336,18 @@ void TaskRFID(void *pvParameters)  // This is a task.
           int userIndex = getUserByID(lastUserData.userId, onBoardUsers);
           Serial.print("userIndex: "); Serial.println(userIndex);
           if( userIndex == -1) {
+            // Add user to onBoardUsers buffer;
             onBoardUsers[onBoardIndex] = lastUserData.userId;
             onBoardIndex++;
             onBoardIndex %= USER_BUFFER_SIZE;
-            // Add user to tapIn buffer
-            tapInEvents[inIndex] = lastUserData;
-            inIndex++;
-            inIndex %= USER_BUFFER_SIZE;
+
+            // tapIn event
+            lastUserData.eventType = 0;
           }
           else {
-            // Add user to tapOut buffer
-            tapOutEvents[outIndex] = lastUserData;
-            outIndex++;
-            outIndex %= USER_BUFFER_SIZE;
+            // tapOut event
+            lastUserData.eventType = 1;
+
             // Remove user from onBoardUsers buffer;
             if (userIndex != onBoardIndex - 1){// not in the last position
               // shift all other elements left
@@ -389,10 +365,16 @@ void TaskRFID(void *pvParameters)  // This is a task.
               displayText("tarifa:",2);
             }
           }
+
+          // Add user to event buffer
+          eventsBuffer[eventsIndex] = lastUserData;
+          eventsIndex++;
+          eventsIndex %= USER_BUFFER_SIZE;
+
           #ifdef DEBUGRFID
             Serial.print("onBoardIndex: ");Serial.print(onBoardIndex); 
-            Serial.print(" inIndex: "); Serial.print(inIndex);
-            Serial.print(" outIndex: "); Serial.println(outIndex);
+            Serial.print(" eventsIndex: "); Serial.print(eventsIndex);
+
             uint8_t j;
             for (j = 0; j < USER_BUFFER_SIZE; j++) {
               Serial.print(" ");Serial.print(onBoardUsers[j]);
@@ -421,28 +403,6 @@ static void syncTimerCallback( TimerHandle_t xTimer )
 /*---------------------- Extra functions ---------------------*/
 /*--------------------------------------------------*/
 
-void testPOST(){
-  char response[32];
-  char body[90];
-  Result result;
-  
-//  print(F("Cofigure bearer: "), http.configureBearer("zap.vivo.com.br"));
-  print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
-  result = http.connect();
-  print(F("HTTP connect: "), result);
-
-  // char test[] = "{\"test\":\"tesvalue\"}";
-  result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
-  print(F("HTTP POST: "), result);
-  if (result == SUCCESS) {
-    #ifdef DEBUGSERIAL
-      Serial.println(F("Server Response:"));
-      Serial.println(response);
-    #endif  
-  }
-
-  print(F("HTTP disconnect: "), http.disconnect());
-}
 
 
 void print(const __FlashStringHelper *message, int code = -1){
