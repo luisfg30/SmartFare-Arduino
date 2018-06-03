@@ -41,6 +41,7 @@
 #define DEBUGRFID
 // #define DEBUGGPS
 #define DEBUGGSM
+// #define GSM_DETAIL
 
 #define TIMER_PERIOD 5000 / portTICK_PERIOD_MS
 #define SYNC_EVENT_BIT ( 1UL << 0UL )
@@ -83,8 +84,11 @@ Adafruit_SSD1306 display(OLED_RESET);
 unsigned int SIM800_RX_PIN = 10; 
 unsigned int SIM800_TX_PIN = 11;
 unsigned int SIM800_RST_PIN = 12;
-HTTP http(GSM_BAUD_RATE, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, TRUE);
-
+#ifdef GSM_DETAIL
+  HTTP http(GSM_BAUD_RATE, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, TRUE);
+#else
+  HTTP http(GSM_BAUD_RATE, SIM800_RX_PIN, SIM800_TX_PIN, SIM800_RST_PIN, FALSE);
+#endif
 // Tasks definition
 void TaskGSM( void *pvParameters );
 void TaskRFID( void *pvParameters );
@@ -142,8 +146,8 @@ xSyncQueue = xQueueCreate( USER_BUFFER_SIZE, sizeof( UserData_t ) );
   SPI.begin();			// Init SPI bus
 	mfrc522.PCD_Init();		// Init MFRC522
   #ifdef DEBUGRFID
-    mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-    Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+    Serial.print(F("RFID "));
+    mfrc522.PCD_DumpVersionToSerial(); 
   #endif
   // First message
   setLedRGB(1,1,0);
@@ -247,12 +251,21 @@ void TaskGSM(void *pvParameters) {
       displayText("Sincronizando", 2);
 
       events = uxQueueMessagesWaiting( xSyncQueue );
-      print(F("Messages in queue: "), events);
+      #ifdef DEBUGGSM
+        print(F("\n Messages in queue: "), events);
+      #endif  
       if ( events > 0) {
         // Configure connection
-        print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
-        result = http.connect();
-        print(F("HTTP connect: "), result);
+        
+        #ifdef DEBUGGSM
+          print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
+          result = http.connect();
+          print(F("HTTP connect: "), result);
+        #else
+          http.configureBearer("claro.com.br");
+          result = http.connect();
+        #endif
+
 
         // Add events to JSON object
         int i;
@@ -281,22 +294,24 @@ void TaskGSM(void *pvParameters) {
             #endif
             // Save string to SD card
             result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
-            print(F("HTTP POST: "), result);
 
             #ifdef DEBUGGSM
-              Serial.println(F("Server Response:"));
-              Serial.println(response);
+              print(F("\n HTTP POST: "), result);
+              print(F("Server Response:"), response);
             #endif  
+
             if (result == SUCCESS) {
               // Remove event from queue
               xQueueReceive( xSyncQueue, &userData, 1 );
             }
           }
         }
-        print(F("HTTP disconnect: "), http.disconnect());
         #ifdef DEBUGGSM
+          print(F("HTTP disconnect: "), http.disconnect());
           events = uxQueueMessagesWaiting( xSyncQueue );
           print(F("Messages in queue: "), events);
+        #else
+          http.disconnect();
         #endif 
       }
     }
@@ -350,7 +365,7 @@ void TaskRFID(void *pvParameters)  // This is a task.
               char utc_timestamp[20];
               strcpy(utc_timestamp, isotime(&utc_tm));
               strcpy(lastUserData.timestamp,utc_timestamp); 
-              #ifdef DEBUGSERIAL
+              #ifdef DEBUGRFID
                 Serial.print(F("UTC timestamp: "));
                 Serial.println(lastUserData.timestamp);
               #endif
@@ -370,7 +385,9 @@ void TaskRFID(void *pvParameters)  // This is a task.
 
           // Check if user is on vehicle
           int userIndex = getUserByID(lastUserData.userId, onBoardUsers);
-          Serial.print("userIndex: "); Serial.println(userIndex);
+          #ifdef DEBUGRFID
+            Serial.print("userIndex: "); Serial.println(userIndex);
+          #endif
           if( userIndex == -1) {
             // Add user to onBoardUsers buffer;
             onBoardUsers[onBoardIndex] = lastUserData.userId;
@@ -508,7 +525,6 @@ bool breakLoop = 0;
             if(breakLoop == 1) {
               break;
             }
-            // Serial.println(pToken);
             switch(field_counter) {
 
               case 1: // Timestamp
