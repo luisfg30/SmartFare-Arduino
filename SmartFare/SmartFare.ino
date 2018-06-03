@@ -16,6 +16,7 @@
 // Arduino libraries
 #include <Wire.h>
 #include <SPI.h>
+#include <SD.h>
 // Smartfare files
 #include "SmartFareData.h"
 #include "rfid_utils.h"
@@ -27,6 +28,7 @@
 #define OLED_RESET          4
 #define RFID_RST_PIN        48         
 #define RFID_SS_PIN         53    //Slave Select or CS Chip Select
+#define SD_CARD_SS_PIN      46
 #define LED_RED             7        
 #define LED_GREEN           6
 #define LED_BLUE            5
@@ -88,6 +90,9 @@ void TaskGPS(void *pvParameters);
 // aux functions declarations
 void print(const __FlashStringHelper *message, int code = -1);
 
+// SD file
+File myFile;
+
 // the setup routine runs once when you press reset:
 void setup() {
 
@@ -116,6 +121,14 @@ syncTimerCallback );
   while(!Serial1);
   Serial.println(F("Started serial 1 (GPS)"));
 
+    Serial.print("Initializing SD card...");
+
+  if (!SD.begin(SD_CARD_SS_PIN)) {
+    Serial.println("initialization failed!");
+    while (1);
+  }
+  Serial.println("initialization done.");
+  // Open config file
 
   // initialize with the I2C addr 0x3D (for the 128x64)
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  
