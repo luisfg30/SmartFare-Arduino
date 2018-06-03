@@ -134,6 +134,8 @@ xSyncQueue = xQueueCreate( USER_BUFFER_SIZE, sizeof( UserData_t ) );
     Serial.print("Initializing SD card...");
 
   if (!SD.begin(SD_CARD_SS_PIN)) {
+    setLedRGB(1,0,0);
+    displayText("Erro SD", 2); 
     Serial.println("initialization failed!");
     while (1);
   }
@@ -272,6 +274,7 @@ void TaskGSM(void *pvParameters) {
         char s_userId[12];
         char s_balance[12];
         char s_eventType[2];
+        char s_fileName[20];
 
         // Process all events on queue
         for(i = 0; i < events ; i++ ){
@@ -280,11 +283,11 @@ void TaskGSM(void *pvParameters) {
             sprintf(s_userId, "%lu", userData.userId);
             sprintf(s_balance, "%d", userData.balance);
             sprintf(s_eventType, "%d",userData.eventType);
+            root["timestamp"] = userData.timestamp; 
             root["vehicleId"] = VEHICLE_ID;
-            root["eventType"] = s_eventType;
             root["userId"] = s_userId;
+            root["eventType"] = s_eventType;
             root["balance"] = s_balance;
-            root["timestamp"] = userData.timestamp;
             root["latitude"] = userData.latitude;
             root["longitude"] = userData.longitude;
 
@@ -292,7 +295,24 @@ void TaskGSM(void *pvParameters) {
             #ifdef DEBUGGSM
               root.printTo(Serial);
             #endif
+
             // Save string to SD card
+            // Serial.print("USERID: ");Serial.println(s_userId);
+            // sprintf(s_fileName, "%s.txt",s_userId);
+            // // if filename.lenght > 8 trim
+            // Serial.print("FILENAME: ");Serial.println(s_fileName);
+            // myFile = SD.open(s_fileName, FILE_WRITE);
+            // if(myFile) {
+            //   myFile.println(jsonString);
+            //   myFile.close();
+            // }
+            //   // Check to see if the file exists:
+            // if (SD.exists(s_fileName)) {
+            //   Serial.println("FILES exists.");
+            // } else {
+            //   Serial.println("FILE doesn't exist.");
+            // }
+            
             result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
 
             #ifdef DEBUGGSM

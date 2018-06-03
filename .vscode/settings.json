@@ -9,6 +9,7 @@
         "slist": "cpp",
         "system_error": "cpp",
         "scoped_allocator": "cpp",
-        "valarray": "cpp"
+        "valarray": "cpp",
+        "fstream": "cpp"
     }
 }
