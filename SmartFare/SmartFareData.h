@@ -4,7 +4,7 @@
 
 #define USER_BUFFER_SIZE 10
 #define MIN_BALANCE 300
-#define VEHICLE_ID 18456
+#define VEHICLE_ID 123456 	// last 6 numbers of VIN
 
 /*****************************************************************************
  * Public types/enumerations/variables

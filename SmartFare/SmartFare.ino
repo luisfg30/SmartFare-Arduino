@@ -243,8 +243,9 @@ void TaskGSM(void *pvParameters)  // This is a task.
           sprintf(s_userId, "%lu", eventsBuffer[i].userId);
           sprintf(s_balance, "%d", eventsBuffer[i].balance);
           sprintf(s_eventType, "%d",eventsBuffer[i].eventType);
+          root["vehicleId"] = VEHICLE_ID;
           root["eventType"] = s_eventType;
-          root["userID"] = s_userId;
+          root["userId"] = s_userId;
           root["balance"] = s_balance;
           root["timestamp"] = eventsBuffer[i].timestamp;
           root["latitude"] = eventsBuffer[i].latitude;
