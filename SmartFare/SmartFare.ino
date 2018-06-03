@@ -203,6 +203,11 @@ void TaskGSM(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
    Serial.println(F("task GSM created"));
+  
+  char response[32];
+  char body[90];
+  Result result;
+   
 
   EventBits_t xEventGroupValue;
   const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
@@ -224,42 +229,61 @@ void TaskGSM(void *pvParameters)  // This is a task.
       setLedRGB(1,0,1);
       displayText("Sincronizando", 2);
 
+      // Configure connection
+      print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
+      result = http.connect();
+      print(F("HTTP connect: "), result);
+
       // Add events to JSON object
       int i;
       char s_userId[12];
       char s_balance[12];
       // tapInEvents
-      JsonArray& tapInEventsJSON = root.createNestedArray("tapInEvents");
+      // JsonArray& tapInEventsJSON = root.createNestedArray("tapInEvents");
       for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
         if (tapInEvents[i].userId != 0) {
-          JsonObject& eventIn = tapInEventsJSON.createNestedObject();
+          // JsonObject& eventIn = tapInEventsJSON.createNestedObject();
           sprintf(s_userId, "%lu", tapInEvents[i].userId);
           sprintf(s_balance, "%d", tapInEvents[i].balance);
-          eventIn["userID"] = s_userId;
-          eventIn["balance"] = s_balance;
-          eventIn["timestamp"] = tapInEvents[i].timestamp;
-          eventIn["latitude"] = tapInEvents[i].latitude;
-          eventIn["longitude"] = tapInEvents[i].longitude;
+          root["userID"] = s_userId;
+          root["balance"] = s_balance;
+          root["timestamp"] = tapInEvents[i].timestamp;
+          root["latitude"] = tapInEvents[i].latitude;
+          root["longitude"] = tapInEvents[i].longitude;
+
+          root.printTo(jsonString);
+          result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
+          print(F("HTTP POST: "), result);
+          if (result == SUCCESS) {
+            #ifdef DEBUGSERIAL
+              Serial.println(F("Server Response:"));
+              Serial.println(response);
+            #endif  
+          }
         }
       }
 
-      // tapOut Events
-      JsonArray& tapOutEventsJSON = root.createNestedArray("tapOutEvents");
-      for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
-        if (tapOutEvents[i].userId != 0) {
-          JsonObject& eventOut = tapOutEventsJSON.createNestedObject();
-          sprintf(s_userId, "%lu", tapOutEvents[i].userId);
-          sprintf(s_balance, "%d", tapOutEvents[i].balance);
-          eventOut["userID"] = s_userId;
-          eventOut["balance"] = s_balance;
-          eventOut["timestamp"] = tapOutEvents[i].timestamp;
-          eventOut["latitude"] = tapOutEvents[i].latitude;
-          eventOut["longitude"] = tapOutEvents[i].longitude;
-        }
-      }
+      // // tapOut Events
+      // JsonArray& tapOutEventsJSON = root.createNestedArray("tapOutEvents");
+      // for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
+      //   if (tapOutEvents[i].userId != 0) {
+      //     JsonObject& eventOut = tapOutEventsJSON.createNestedObject();
+      //     sprintf(s_userId, "%lu", tapOutEvents[i].userId);
+      //     sprintf(s_balance, "%d", tapOutEvents[i].balance);
+      //     eventOut["userID"] = s_userId;
+      //     eventOut["balance"] = s_balance;
+      //     eventOut["timestamp"] = tapOutEvents[i].timestamp;
+      //     eventOut["latitude"] = tapOutEvents[i].latitude;
+      //     eventOut["longitude"] = tapOutEvents[i].longitude;
+      //   }
+      // }
 
-      root.printTo(jsonString);
-      testPOST();   
+      // root.printTo(jsonString);
+      // jsonBuffer.clear();
+
+  print(F("HTTP disconnect: "), http.disconnect());
+
+      // testPOST();   
       // jsonBuffer.clear();
     }
   }
