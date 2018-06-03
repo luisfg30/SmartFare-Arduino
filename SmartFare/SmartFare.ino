@@ -2,6 +2,7 @@
 #include "Arduino_FreeRTOS.h"
 #include "timers.h"
 #include "event_groups.h"
+#include "queue.h"
 // Standard C libraries
 #include <stdio.h>
 #include <time.h>
@@ -35,9 +36,11 @@
 
 #define GPS_BAUD_RATE       9600 
 #define GSM_BAUD_RATE       9600
+
 #define DEBUGSERIAL
 #define DEBUGRFID
 // #define DEBUGGPS
+#define DEBUGGSM
 
 #define TIMER_PERIOD 5000 / portTICK_PERIOD_MS
 #define SYNC_EVENT_BIT ( 1UL << 0UL )
@@ -50,11 +53,11 @@
   JsonObject& root = jsonBuffer.createObject();
   char jsonString[200];
 
+// FreeRTOS srtuctures
 TimerHandle_t syncTimer;
 EventGroupHandle_t xEventGroup;
+QueueHandle_t xSyncQueue;
 
-static UserData_t eventsBuffer[USER_BUFFER_SIZE];
-static uint8_t eventsIndex = 0;
 
 static uint32_t onBoardUsers[USER_BUFFER_SIZE];
 static uint8_t onBoardIndex;
@@ -104,6 +107,9 @@ void setup() {
   // Create a oneshot timer
 syncTimer = xTimerCreate("SyncTimer", TIMER_PERIOD , pdFALSE, 0, 
 syncTimerCallback );
+
+// Create synch events queue
+xSyncQueue = xQueueCreate( USER_BUFFER_SIZE, sizeof( UserData_t ) );
 
   // Init LED pins
   pinMode(LED_RED, OUTPUT);
@@ -209,8 +215,7 @@ char incomingByte = 0;
   }
 }
 
-void TaskGSM(void *pvParameters)  // This is a task.
-{
+void TaskGSM(void *pvParameters) {
   (void) pvParameters;
    Serial.println(F("task GSM created"));
   
@@ -221,9 +226,11 @@ void TaskGSM(void *pvParameters)  // This is a task.
 
   EventBits_t xEventGroupValue;
   const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
+  UserData_t userData;
+  BaseType_t xStatus;
+  UBaseType_t events;
 
-  for (;;) 
-  {
+  for (;;) {
     // Block to wait for event bits to become set within the event group
     xEventGroupValue = xEventGroupWaitBits(
     xEventGroup,
@@ -239,66 +246,62 @@ void TaskGSM(void *pvParameters)  // This is a task.
       setLedRGB(1,0,1);
       displayText("Sincronizando", 2);
 
-      // Configure connection
-      print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
-      result = http.connect();
-      print(F("HTTP connect: "), result);
+      events = uxQueueMessagesWaiting( xSyncQueue );
+      print(F("Messages in queue: "), events);
+      if ( events > 0) {
+        // Configure connection
+        print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
+        result = http.connect();
+        print(F("HTTP connect: "), result);
 
-      // Add events to JSON object
-      int i;
-      char s_userId[12];
-      char s_balance[12];
-      char s_eventType[2];
+        // Add events to JSON object
+        int i;
+        char s_userId[12];
+        char s_balance[12];
+        char s_eventType[2];
 
-      // eventsBuffer
-      for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
-        if (eventsBuffer[i].userId != 0) {
-          sprintf(s_userId, "%lu", eventsBuffer[i].userId);
-          sprintf(s_balance, "%d", eventsBuffer[i].balance);
-          sprintf(s_eventType, "%d",eventsBuffer[i].eventType);
-          root["vehicleId"] = VEHICLE_ID;
-          root["eventType"] = s_eventType;
-          root["userId"] = s_userId;
-          root["balance"] = s_balance;
-          root["timestamp"] = eventsBuffer[i].timestamp;
-          root["latitude"] = eventsBuffer[i].latitude;
-          root["longitude"] = eventsBuffer[i].longitude;
+        // Process all events on queue
+        for(i = 0; i < events ; i++ ){
+          // Read one event without removing from queue
+          if( xQueuePeek( xSyncQueue, &userData, 1 ) == pdPASS ) {
+            sprintf(s_userId, "%lu", userData.userId);
+            sprintf(s_balance, "%d", userData.balance);
+            sprintf(s_eventType, "%d",userData.eventType);
+            root["vehicleId"] = VEHICLE_ID;
+            root["eventType"] = s_eventType;
+            root["userId"] = s_userId;
+            root["balance"] = s_balance;
+            root["timestamp"] = userData.timestamp;
+            root["latitude"] = userData.latitude;
+            root["longitude"] = userData.longitude;
 
-          root.printTo(jsonString);
+            root.printTo(jsonString);
+            #ifdef DEBUGGSM
+              root.printTo(Serial);
+            #endif
+            // Save string to SD card
+            result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
+            print(F("HTTP POST: "), result);
 
-          // Save string to SD card
-          print(F("userId to print: "), s_userId);
-          result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
-          print(F("HTTP POST: "), result);
-
-          #ifdef DEBUGSERIAL
-            Serial.println(F("Server Response:"));
-            Serial.println(response);
-          #endif  
-          if (result == SUCCESS) {
-            // Remove event from buffer
-            if (i != eventsIndex - 1){// not in the last position
-              // shift all other elements left
-              uint8_t j; 
-              for (j = i ; j < eventsIndex - 1; j ++){
-                eventsBuffer[j] = eventsBuffer[j + 1];
-              }
+            #ifdef DEBUGGSM
+              Serial.println(F("Server Response:"));
+              Serial.println(response);
+            #endif  
+            if (result == SUCCESS) {
+              // Remove event from queue
+              xQueueReceive( xSyncQueue, &userData, 1 );
             }
-            eventsIndex --;
-            eventsBuffer[eventsIndex].userId = 0;
           }
         }
+        print(F("HTTP disconnect: "), http.disconnect());
+        #ifdef DEBUGGSM
+          events = uxQueueMessagesWaiting( xSyncQueue );
+          print(F("Messages in queue: "), events);
+        #endif 
       }
-      Serial.print(F("Events index: "));Serial.print(eventsIndex);
-      uint8_t k;
-      for (k = 0; k < USER_BUFFER_SIZE; k++) {
-        Serial.print(" ");Serial.print(eventsBuffer[k].userId);
-      }
-  print(F("HTTP disconnect: "), http.disconnect());
     }
   }
 }
-
 void TaskRFID(void *pvParameters)  // This is a task.
 {
   (void) pvParameters;
@@ -399,14 +402,11 @@ void TaskRFID(void *pvParameters)  // This is a task.
             }
           }
 
-          // Add user to event buffer
-          eventsBuffer[eventsIndex] = lastUserData;
-          eventsIndex++;
-          eventsIndex %= USER_BUFFER_SIZE;
+          // Add event to synch queue
+          xQueueSendToBack( xSyncQueue, &lastUserData, 0 );
 
           #ifdef DEBUGRFID
             Serial.print("onBoardIndex: ");Serial.print(onBoardIndex); 
-            Serial.print(" eventsIndex: "); Serial.print(eventsIndex);
 
             uint8_t j;
             for (j = 0; j < USER_BUFFER_SIZE; j++) {
