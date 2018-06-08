@@ -37,9 +37,9 @@
 #define GSM_BAUD_RATE       9600
 
 #define DEBUGSERIAL
-#define DEBUGRFID
+// #define DEBUGRFID
 // #define DEBUGGPS
-#define DEBUGGSM
+// #define DEBUGGSM
 // #define GSM_DETAIL
 
 #define TIMER_PERIOD 10000 / portTICK_PERIOD_MS
@@ -272,7 +272,7 @@ void TaskGSM(void *pvParameters) {
             JsonObject& root = jsonBuffer.createObject();
 
             sprintf(s_userId, "%lu", eventsBuffer[i].userId);
-            Serial.print(F("USERID: "));Serial.println(s_userId);
+            // Serial.print(F("USERID: "));Serial.println(s_userId);
             sprintf(s_balance, "%d", eventsBuffer[i].balance);
             sprintf(s_eventType, "%d",eventsBuffer[i].eventType);
             root["timestamp"] = eventsBuffer[i].timestamp; 
