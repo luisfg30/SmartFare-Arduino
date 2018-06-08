@@ -2,5 +2,6 @@
     "board": "arduino:avr:mega",
     "configuration": "cpu=atmega2560",
     "sketch": "SmartFare\\SmartFare.ino",
+    "output": "C:\\vcscodeArduino",
     "port": "COM13"
 }

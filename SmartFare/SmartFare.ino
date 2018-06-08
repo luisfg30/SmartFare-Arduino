@@ -313,7 +313,7 @@ void TaskGSM(void *pvParameters) {
             //   Serial.println("FILE doesn't exist.");
             // }
             
-            result = http.post("ptsv2.com/t/1etbw-1520389850/post", jsonString, response);
+            result = http.post("smartfare-web.herokuapp.com/api/update", jsonString, response);
 
             #ifdef DEBUGGSM
               print(F("\n HTTP POST: "), result);
@@ -323,6 +323,10 @@ void TaskGSM(void *pvParameters) {
             if (result == SUCCESS) {
               // Remove event from queue
               xQueueReceive( xSyncQueue, &userData, 1 );
+              // feedback to user, green LED
+              setLedRGB(0,1,0);
+              vTaskDelay( 150 / portTICK_PERIOD_MS ); 
+              setLedRGB(1,0,1);
             }
           }
         }
