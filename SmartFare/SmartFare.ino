@@ -250,7 +250,8 @@ void TaskGSM(void *pvParameters) {
 
     if( ( xEventGroupValue & SYNC_EVENT_BIT ) != 0 ) {
       setLedRGB(1,0,1);
-      displayText("Sincronizando", 2);
+      displayText("Enviando  Dados", 2);
+                   
 
       events = uxQueueMessagesWaiting( xSyncQueue );
       #ifdef DEBUGGSM
@@ -395,10 +396,12 @@ void TaskRFID(void *pvParameters)  // This is a task.
               #endif
             }
 
-           // Record coordinates
-           strcpy(lastUserData.latitude, gps_data_parsed.latitude); 
+           // Record coordinates, use dot separator for sign
+           strcpy(lastUserData.latitude, gps_data_parsed.latitude);
+           strcat(lastUserData.latitude, " "); 
            strcat(lastUserData.latitude, gps_data_parsed.latituteSign);
            strcpy(lastUserData.longitude, gps_data_parsed.longitude);
+           strcat(lastUserData.longitude, " ");
            strcat(lastUserData.longitude, gps_data_parsed.longitudeSign);
 
            #ifdef DEBUGRFID
