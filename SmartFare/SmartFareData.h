@@ -27,7 +27,8 @@ typedef struct {
 	char timestamp[20]; //UTC timestamp
 	char latitude[15];
 	char longitude[15];	
-	uint8_t eventType; 	// 0 = tapIn, 1 = tapOut			 
+	uint8_t eventType; 	// 0 = tapIn, 1 = tapOut	
+	uint8_t synchronized; // 0 = not synch, 1 = synched 		 
 } UserData_t;
 
 // Used to show proper massages in the LCD displays

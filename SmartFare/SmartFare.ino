@@ -2,7 +2,6 @@
 #include "Arduino_FreeRTOS.h"
 #include "timers.h"
 #include "event_groups.h"
-#include "queue.h"
 // Standard C libraries
 #include <stdio.h>
 #include <time.h>
@@ -43,22 +42,21 @@
 #define DEBUGGSM
 // #define GSM_DETAIL
 
-#define TIMER_PERIOD 5000 / portTICK_PERIOD_MS
+#define TIMER_PERIOD 10000 / portTICK_PERIOD_MS
 #define SYNC_EVENT_BIT ( 1UL << 0UL )
 
 /*******************************************************************************
  * Public types/enumerations/variables
  ******************************************************************************/
 
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject& root = jsonBuffer.createObject();
   char jsonString[200];
 
 // FreeRTOS srtuctures
 TimerHandle_t syncTimer;
 EventGroupHandle_t xEventGroup;
-QueueHandle_t xSyncQueue;
 
+static UserData_t eventsBuffer[USER_BUFFER_SIZE];
+static uint8_t eventsIndex = 0;
 
 static uint32_t onBoardUsers[USER_BUFFER_SIZE];
 static uint8_t onBoardIndex;
@@ -112,8 +110,6 @@ void setup() {
 syncTimer = xTimerCreate("SyncTimer", TIMER_PERIOD , pdFALSE, 0, 
 syncTimerCallback );
 
-// Create synch events queue
-xSyncQueue = xQueueCreate( USER_BUFFER_SIZE, sizeof( UserData_t ) );
 
   // Init LED pins
   pinMode(LED_RED, OUTPUT);
@@ -232,9 +228,6 @@ void TaskGSM(void *pvParameters) {
 
   EventBits_t xEventGroupValue;
   const EventBits_t xBitsToWaitFor = SYNC_EVENT_BIT;
-  UserData_t userData;
-  BaseType_t xStatus;
-  UBaseType_t events;
 
   for (;;) {
     // Block to wait for event bits to become set within the event group
@@ -252,14 +245,7 @@ void TaskGSM(void *pvParameters) {
       setLedRGB(1,0,1);
       displayText("Enviando  Dados", 2);
                    
-
-      events = uxQueueMessagesWaiting( xSyncQueue );
-      #ifdef DEBUGGSM
-        print(F("\n Messages in queue: "), events);
-      #endif  
-      if ( events > 0) {
         // Configure connection
-        
         #ifdef DEBUGGSM
           print(F("Cofigure bearer: "), http.configureBearer("claro.com.br"));
           result = http.connect();
@@ -277,20 +263,25 @@ void TaskGSM(void *pvParameters) {
         char s_eventType[2];
         char s_fileName[20];
 
-        // Process all events on queue
-        for(i = 0; i < events ; i++ ){
-          // Read one event without removing from queue
-          if( xQueuePeek( xSyncQueue, &userData, 1 ) == pdPASS ) {
-            sprintf(s_userId, "%lu", userData.userId);
-            sprintf(s_balance, "%d", userData.balance);
-            sprintf(s_eventType, "%d",userData.eventType);
-            root["timestamp"] = userData.timestamp; 
+        // Check all events on buffer
+        for(i = 0; i < USER_BUFFER_SIZE ; i++ ){
+          if ( (eventsBuffer[i].userId != 0) && 
+          (eventsBuffer[i].synchronized == 0)) {
+
+            StaticJsonBuffer<200> jsonBuffer;
+            JsonObject& root = jsonBuffer.createObject();
+
+            sprintf(s_userId, "%lu", eventsBuffer[i].userId);
+            Serial.print(F("USERID: "));Serial.println(s_userId);
+            sprintf(s_balance, "%d", eventsBuffer[i].balance);
+            sprintf(s_eventType, "%d",eventsBuffer[i].eventType);
+            root["timestamp"] = eventsBuffer[i].timestamp; 
             root["vehicleId"] = VEHICLE_ID;
             root["userId"] = s_userId;
             root["eventType"] = s_eventType;
             root["balance"] = s_balance;
-            root["latitude"] = userData.latitude;
-            root["longitude"] = userData.longitude;
+            root["latitude"] = eventsBuffer[i].latitude;
+            root["longitude"] = eventsBuffer[i].longitude;
 
             root.printTo(jsonString);
             #ifdef DEBUGGSM
@@ -322,23 +313,20 @@ void TaskGSM(void *pvParameters) {
             #endif  
 
             if (result == SUCCESS) {
-              // Remove event from queue
-              xQueueReceive( xSyncQueue, &userData, 1 );
+              // Set as synched
+              eventsBuffer[i].synchronized = 1 ;
               // feedback to user, green LED
-              setLedRGB(0,1,0);
-              vTaskDelay( 150 / portTICK_PERIOD_MS ); 
-              setLedRGB(1,0,1);
+              // setLedRGB(0,1,0);
+              // vTaskDelay( 150 / portTICK_PERIOD_MS ); 
+              // setLedRGB(1,0,1);
             }
-          }
+          }   
         }
         #ifdef DEBUGGSM
           print(F("HTTP disconnect: "), http.disconnect());
-          events = uxQueueMessagesWaiting( xSyncQueue );
-          print(F("Messages in queue: "), events);
         #else
           http.disconnect();
         #endif 
-      }
     }
   }
 }
@@ -446,8 +434,12 @@ void TaskRFID(void *pvParameters)  // This is a task.
             }
           }
 
-          // Add event to synch queue
-          xQueueSendToBack( xSyncQueue, &lastUserData, 0 );
+          // Add user data to event buffer
+          lastUserData.synchronized = 0;
+          eventsBuffer[eventsIndex] = lastUserData;
+          eventsIndex++;
+          eventsIndex %= USER_BUFFER_SIZE;
+
 
           #ifdef DEBUGRFID
             Serial.print("onBoardIndex: ");Serial.print(onBoardIndex); 
